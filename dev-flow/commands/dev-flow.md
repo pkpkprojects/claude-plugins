@@ -5,7 +5,7 @@ argument-hint: "[path/to/prd.md or inline task description]"
 
 # dev-flow: Full Development Pipeline
 
-This is the main orchestration entry point for the dev-flow pipeline. It accepts either a file path to a PRD/task markdown document or an inline task description, and drives the complete development lifecycle through specialized subagents.
+This is the main orchestration entry point for the dev-flow pipeline. It accepts either a file path to a PRD/task markdown document or an inline task description, and drives the complete development lifecycle. Phases 1-2 use single-shot subagents. Phase 3 uses the Team system (TeamCreate + TaskCreate + team members) for dependency-enforced implementation and reviews.
 
 The argument is available as `$ARGUMENTS`.
 
@@ -13,17 +13,21 @@ The argument is available as `$ARGUMENTS`.
 
 ## MANDATORY EXECUTION RULES
 
-**You are an ORCHESTRATOR.** You MUST follow the pipeline below step by step. You do NOT implement code yourself. You dispatch specialized subagents via the `Task` tool and coordinate their work.
+**You are an ORCHESTRATOR.** You MUST follow the pipeline below step by step. You do NOT implement code yourself. You coordinate the work of specialized agents.
+
+**The pipeline has TWO different dispatching modes:**
+- **Phase 1 & 2:** Single-shot subagents via `Task` tool (architect, UX designer). These run, return a result, and are done.
+- **Phase 3:** A **TEAM** via `TeamCreate` + `TaskCreate` + `Task` with `team_name`. This creates a shared task list with dependency enforcement. Teammates run in the background and pick up tasks autonomously. **You MUST use TeamCreate first, then TaskCreate for all tasks, then spawn teammates with `team_name` parameter.**
 
 **CRITICAL rules:**
-1. **You MUST use the `Task` tool** to dispatch subagents for each phase. Do NOT write code, create files, or implement anything yourself.
+1. **You MUST NOT write code, create files, or implement anything yourself.** You are the orchestrator, not an implementer.
 2. **You MUST follow ALL phases in order.** Do not skip phases. Do not stop after one phase to ask the user. Continue autonomously through the entire pipeline.
 3. **You MUST NOT ask "shall I proceed?" or "would you like me to continue?"** between phases. The pipeline runs to completion unless a review fails after 3 iterations (escalation) or the user explicitly requests a stop.
 4. **Agent prompts are embedded below in the Appendices.** Do NOT try to read agent files from the plugin directory. Use the prompts from the Appendices directly.
-5. **Each subagent gets a FRESH dispatch** via `Task`. Never reuse agents across phases.
-6. **The only user interaction points are:** (a) approving the architect's plan, (b) approving the design system (if applicable), (c) escalation after 3 failed review iterations.
-7. **ALL teammate agents in Phase 3 MUST be spawned with `run_in_background: true`.** This is mandatory -- teammates work autonomously in the background. You (the orchestrator) monitor their progress. If you spawn a teammate WITHOUT `run_in_background: true`, the pipeline will block waiting for that single agent to finish instead of running agents in parallel.
-8. **Spawn ALL teammates in a SINGLE message** with multiple parallel Task tool calls. Do NOT spawn them one at a time.
+5. **The only user interaction points are:** (a) approving the architect's plan, (b) approving the design system (if applicable), (c) escalation after 3 failed review iterations.
+6. **Phase 3 MUST use the Team system.** You MUST call `TeamCreate` before creating tasks. You MUST call `TaskCreate` with `blockedBy` dependencies. You MUST spawn agents with `team_name` parameter. Without this, task dependencies are not enforced and reviews will be skipped.
+7. **ALL Phase 3 agents MUST be spawned with `run_in_background: true`.** Agents work autonomously in the background. You (the orchestrator) monitor their progress via `TaskList`. If you spawn an agent WITHOUT `run_in_background: true`, the pipeline blocks waiting for that single agent instead of running in parallel.
+8. **Spawn ALL Phase 3 agents in a SINGLE message** with multiple parallel `Task` tool calls. Do NOT spawn them one at a time -- send one message containing all 3-4 Task calls.
 
 ---
 
@@ -87,11 +91,11 @@ Store the resolved configuration as `CONFIG` for use throughout the pipeline.
 
 ---
 
-## Phase 1: Planning (Architect Agent)
+## Phase 1: Planning (Architect Agent) -- Single-Shot Subagent
 
 ### How to dispatch the architect
 
-1. **Build the subagent prompt** using the ARCHITECT PROMPT from **Appendix A** below:
+1. **Build the prompt** using the ARCHITECT PROMPT from **Appendix A** below:
    ```
    <system>
    [Copy the full ARCHITECT PROMPT from Appendix A]
@@ -149,7 +153,7 @@ The plan should contain phases, each with:
 
 ---
 
-## Phase 2: Design System (UX Designer Agent) -- Conditional
+## Phase 2: Design System (UX Designer Agent) -- Conditional, Single-Shot Subagent
 
 **Skip this phase entirely if:**
 - `CONFIG.project.has_design_system` is `false`, AND
@@ -212,12 +216,18 @@ The plan should contain phases, each with:
 
 ---
 
-## Phase 3: Team-Based Implementation
+## Phase 3: Implementation -- TEAM SYSTEM (NOT single-shot subagents)
 
-**After the plan is approved (and design system if applicable), use the Team/Task system to orchestrate implementation.** The Team system enforces the review pipeline through task dependencies -- agents CANNOT skip reviews because blocked tasks cannot be claimed.
+**STOP. Phase 3 is fundamentally different from Phases 1-2.** Do NOT dispatch single-shot subagents here. You MUST:
+1. Call `TeamCreate` to create a team (this creates a shared task list)
+2. Call `TaskCreate` to create tasks with `blockedBy` dependencies (this enforces review order)
+3. Call `Task` with `team_name` parameter to spawn agents as team members (this gives them access to the shared task list)
 
-### 3.1 Create the Team
+Without the Team system, task dependencies are not enforced and reviews WILL be skipped.
 
+### 3.1 Create the Team (MANDATORY FIRST STEP)
+
+You MUST call TeamCreate before doing anything else in Phase 3:
 ```
 TeamCreate(team_name="dev-flow-pipeline", description="Dev-flow implementation pipeline")
 ```
@@ -582,7 +592,7 @@ After presenting the PM report:
 
 # APPENDICES: Agent System Prompts
 
-The following sections contain the full system prompts for each agent. When dispatching a subagent via the Task tool, copy the relevant appendix content into the `<system>` section of the prompt.
+The following sections contain the full system prompts for each agent. When dispatching an agent via the Task tool (either as a single-shot subagent in Phases 1-2, or as a team member in Phase 3), copy the relevant appendix content into the `<system>` section of the prompt.
 
 **Do NOT try to read agent files from the plugin directory. Use these appendices directly.**
 
