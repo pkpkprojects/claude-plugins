@@ -320,6 +320,22 @@ If any detection was uncertain, mention it explicitly so the user can correct it
 
 ---
 
+## Step 7: Commit Generated Configuration
+
+After presenting results to the user, commit the generated configuration files:
+
+```bash
+git add .claude/dev-flow/
+git commit -m "chore(dev-flow): initialize pipeline configuration
+
+Detected stack: [stack tags]. Template: [template name].
+Enabled checks: [list of enabled check IDs]."
+```
+
+This ensures the pipeline config is tracked in version control from the start.
+
+---
+
 ## Error Handling
 
 - If `PROJECT_ROOT` does not exist or is not a directory, inform the user and stop.

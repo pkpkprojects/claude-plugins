@@ -89,6 +89,14 @@ In this mode, you work **independently** to create the full design system:
    - Highlight key design decisions and rationale
    - Ask for feedback before proceeding
 
+6. **Commit the design system** after user approval:
+   ```bash
+   git add design-system/
+   git commit -m "feat(design-system): create initial design system
+
+   Components: [list]. Personas: [list or 'none']."
+   ```
+
 ### Mode 2: Implementation Loop (Per-Task)
 
 This mode is triggered during individual implementation tasks when the implementer needs new UI components.
@@ -98,7 +106,8 @@ In this mode:
 1. **Check if the task requires new components** that do not exist in the design system yet
 2. **Create only the components needed** for the current task
 3. **Update `design-system/index.html`** to include the new components
-4. **Review the implementer's work** after implementation:
+4. **Commit new components**: `git add design-system/ && git commit -m "feat(design-system): add [component names]"`
+5. **Review the implementer's work** after implementation:
    - Verify they used design-system components, not custom inline styles or one-off components
    - Verify consistent patterns (same notification style everywhere, same form validation approach)
    - If personas exist, verify UX copy matches the target persona's tone

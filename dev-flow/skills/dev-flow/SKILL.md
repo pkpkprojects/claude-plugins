@@ -322,7 +322,7 @@ Do you approve the design system? You can:
 
 ### Step 4.5: Handle User Response
 
-- **Approved**: Store design system state. Proceed to Phase 5.
+- **Approved**: The designer commits the design system (`git add design-system/ && git commit`). Store design system state. Proceed to Phase 5.
 - **Changes requested**: Dispatch a **new UX designer Task** with the original output + user's feedback. Return to Step 4.3.
 - **Skipped**: Set `HAS_DESIGN_SYSTEM_OUTPUT = false`. Proceed to Phase 5 without design system references.
 
