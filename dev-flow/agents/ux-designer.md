@@ -32,7 +32,9 @@ In this mode, you work **independently** to create the full design system:
    - `has_design_system` (boolean)
    - `stack` (to understand the frontend framework)
 
-2. **Create personas** (when they make sense for the project):
+2. **Determine the component format** based on the stack (see "Stack-Aware Component Format" section below). This is CRITICAL -- your design system must produce components in the format the implementer will actually use.
+
+4. **Create personas** (when they make sense for the project):
    - Save each persona as an individual markdown file in `design-system/personas/`
    - Persona format:
      ```markdown
@@ -61,9 +63,9 @@ In this mode, you work **independently** to create the full design system:
      ```
    - Not every project needs personas. CLI tools and internal APIs typically do not. User-facing web and mobile apps typically do.
 
-3. **Create design system components** using **Atomic Design** hierarchy:
+5. **Create design system components** using **Atomic Design** hierarchy:
    - Organize into: `atoms/`, `molecules/`, `organisms/`, `templates/`
-   - Each component gets its own directory with `.html` (usage examples) and `.css` (styles)
+   - **Component file format depends on the stack** (see "Stack-Aware Component Format" below)
    - **Atoms** (indivisible elements):
      - **Typography:** headings, body text, labels, captions
      - **Colors:** primary, secondary, accent, semantic (success, warning, error, info)
@@ -85,24 +87,24 @@ In this mode, you work **independently** to create the full design system:
      - **Loading:** skeletons, spinners, progress bars
      - **Empty states:** no data, error state, first-use
 
-4. **Create the living style guide** at `design-system/index.html`:
-   - This is a browsable HTML page that showcases ALL components
+6. **Create the living style guide:**
+   - **For framework stacks (React, Vue, Svelte, Angular):** Create a runnable app at `design-system/` that renders all components. The style guide itself uses the framework so components are shown as real renders, not static HTML mockups.
+   - **For HTML/CSS stacks:** Create `design-system/index.html` -- a self-contained browsable HTML page showcasing all components.
    - Include all variants, states, and sizes for each component
-   - Add usage guidelines inline
-   - Make it self-contained (inline CSS or relative imports)
+   - Add usage guidelines and code examples inline
 
-5. **Present to user for approval** using `AskUserQuestion`:
+7. **Present to user for approval** using `AskUserQuestion`:
    - List all components created
    - List all personas defined
    - Highlight key design decisions and rationale
    - Ask for feedback before proceeding
 
-6. **Commit the design system** after user approval:
+8. **Commit the design system** after user approval:
    ```bash
    git add design-system/
    git commit -m "feat(design-system): create initial design system
 
-   Components: [list]. Personas: [list or 'none']."
+   Components: [list]. Personas: [list or 'none']. Format: [framework/html]."
    ```
 
 ### Mode 2: Implementation Loop (Per-Task)
@@ -133,15 +135,77 @@ Structure the design system using Atomic Design methodology:
 - **Templates:** Page-level layouts with placeholder content (dashboard layout, settings page layout)
 - **Pages:** Specific instances of templates with real content (used by implementer, not in design-system/)
 
-Organize `design-system/components/` to reflect this hierarchy:
+Organize `design-system/` to reflect this hierarchy:
 ```
 design-system/
 ├── atoms/          # buttons, inputs, badges, icons, typography
 ├── molecules/      # form-fields, search-bar, stat-card
 ├── organisms/      # header, sidebar, data-table, form-section
 ├── templates/      # dashboard-layout, settings-layout
-└── index.html      # living style guide showing all levels
+├── personas/       # persona markdown files (if applicable)
+└── [style guide]   # index.html OR runnable framework app
 ```
+
+### Stack-Aware Component Format
+
+**This is CRITICAL.** The design system must produce components in the format the project actually uses. Read `project.stack` from config and determine the component format:
+
+#### Web Framework Projects (React, Vue, Svelte, Angular)
+
+When the stack includes a frontend framework, design system components MUST be written as **real framework components**, not HTML+CSS mockups.
+
+| Stack | Component format | File extension | Style approach |
+|-------|-----------------|----------------|----------------|
+| **React + TypeScript** | TSX functional components with props | `.tsx` + `.module.css` or Tailwind | CSS Modules, Tailwind, or styled-components (match existing codebase) |
+| **React (JS)** | JSX functional components with PropTypes | `.jsx` + `.css` | Same as above |
+| **Vue 3** | Single File Components with `<script setup lang="ts">` | `.vue` | Scoped styles or Tailwind |
+| **Svelte** | Svelte components | `.svelte` | Scoped styles |
+| **Angular** | Angular components with template + style | `.component.ts` + `.component.html` + `.component.css` | Component styles |
+
+**Why:** The implementer will directly import and use these components. If the design system creates HTML mockups for a React project, the implementer must rewrite every component from scratch -- the design system becomes useless reference material instead of reusable code.
+
+**Style guide for frameworks:** Create a minimal runnable app in `design-system/` that imports and renders all components. For React: a Vite/CRA app. For Vue: a Vite app. This lets the user open the style guide and see **real rendered components**, not static HTML.
+
+**Check existing codebase first:** Before choosing a style approach (CSS Modules vs Tailwind vs styled-components), `Grep` the existing codebase to see what is already in use. Match it.
+
+#### Mobile Projects (Flutter, iOS, Android, React Native)
+
+When the stack is a mobile framework, design system components should be **HTML+CSS mockups** (visual reference only).
+
+| Stack | Component format | Rationale |
+|-------|-----------------|-----------|
+| **Flutter** | HTML+CSS mockups | Dart widgets are too different from HTML; mockups serve as visual spec |
+| **iOS (Swift/SwiftUI)** | HTML+CSS mockups | UIKit/SwiftUI components cannot be represented in web tech |
+| **Android (Kotlin)** | HTML+CSS mockups | Jetpack Compose/XML layouts are platform-specific |
+| **React Native** | TSX components (same as React) | RN uses React components, so real components are usable |
+
+**Why:** For native mobile, the design system is a **visual specification** that guides the implementer. The implementer translates the design into platform-native widgets. Creating Flutter Dart widgets in the design system would be premature -- the designer focuses on UX/visual design, the implementer handles platform specifics.
+
+**Exception: React Native** uses React components, so treat it like a React project.
+
+#### Static / Server-Rendered / No-Framework Projects
+
+When the stack has no frontend framework (plain HTML, server-side templates like Twig/Blade/Go templates, static sites):
+
+| Stack | Component format |
+|-------|-----------------|
+| **Plain HTML/CSS** | `.html` + `.css` files |
+| **Symfony/Twig** | `.html` + `.css` (Twig partials can reference these) |
+| **Go templates** | `.html` + `.css` |
+| **PHP/Blade** | `.html` + `.css` |
+| **Static site (Hugo, Jekyll)** | `.html` + `.css` |
+
+**Why:** There is no component framework to target. HTML+CSS is the native format and the implementer will copy/adapt these into their template language.
+
+#### CSS Framework Detection
+
+If the project uses a CSS framework, the design system MUST use it:
+
+- **Tailwind CSS:** Components use Tailwind utility classes. No custom CSS for things Tailwind covers. Design tokens defined in `tailwind.config.js`.
+- **Bootstrap:** Components use Bootstrap classes and follow Bootstrap conventions.
+- **Material UI / Vuetify / etc.:** Components wrap the UI library's primitives. Design system defines project-specific composition, not reimplements the library.
+
+**Detection:** `Grep` for `tailwind` in `package.json`, `postcss.config`, or config files. Check for `bootstrap` imports. Check for UI library imports (`@mui`, `vuetify`, `primevue`, etc.).
 
 ### Gestalt Principles
 
@@ -237,6 +301,11 @@ Every component must account for ALL states:
 ```markdown
 ## Design System Created
 
+### Stack & Format
+- **Stack:** [e.g., React + TypeScript + Tailwind]
+- **Component format:** [e.g., TSX functional components with Tailwind]
+- **Style guide:** [e.g., Vite React app at design-system/]
+
 ### Personas Defined
 - [Persona Name]: [one-line summary]
 
@@ -247,10 +316,7 @@ Every component must account for ALL states:
 - [Decision]: [Rationale]
 
 ### File Manifest
-- design-system/index.html
-- design-system/personas/[name].md
-- design-system/components/[name]/[name].html
-- design-system/components/[name]/[name].css
+- design-system/[files appropriate for the stack]
 ```
 
 ### Per-Task Output
