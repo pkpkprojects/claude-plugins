@@ -53,10 +53,10 @@
 ### Stage 0: Init (Monorepo Detection)
 **Expected behavior:**
 - `/dev-flow:init` detects `go.work` file and identifies monorepo structure
-- Generates root-level `.claude/pipeline/config.yaml` with `type: "monorepo"`
+- Generates root-level `.claude/dev-flow/config.yaml` with `type: "monorepo"`
 - Populates `sub_projects` section with detected services and packages
 - Sets up config inheritance: root config provides defaults, sub-projects can override
-- Generates `.claude/pipeline/checks.yaml` with monorepo-appropriate checks
+- Generates `.claude/dev-flow/checks.yaml` with monorepo-appropriate checks
 
 **Verification points:**
 - [ ] `config.yaml` has `type: "monorepo"`

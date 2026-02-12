@@ -69,7 +69,7 @@ As you observe the pipeline, suggest new review checks when patterns emerge:
 | Background jobs added | Idempotency, retry logic, dead letter queue checks |
 
 When suggesting a check:
-1. Read the current `.claude/pipeline/review/checks.yaml`
+1. Read the current `.claude/dev-flow/review/checks.yaml`
 2. Formulate the check in the correct format:
    ```yaml
    - id: suggested_check_id
@@ -91,7 +91,7 @@ Before generating the report, use the `superpowers:verification-before-completio
 
 **Steps to produce the final report:**
 
-1. **Run the project's test command** (from `.claude/pipeline/config.yaml`):
+1. **Run the project's test command** (from `.claude/dev-flow/config.yaml`):
    - Execute it using `Bash`
    - Capture pass/fail count and any failures
    - ALL tests must pass for the report to show COMPLETE

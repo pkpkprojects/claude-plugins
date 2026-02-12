@@ -25,7 +25,7 @@
 
 ### Stage 1: Architect
 **Expected behavior:**
-- Reads `.claude/pipeline/config.yaml`
+- Reads `.claude/dev-flow/config.yaml`
 - Recognizes this as a simple task (S complexity)
 - Does NOT over-architect (no database health checks, no dependency injection framework)
 - Proposes a single phase since the task is trivial

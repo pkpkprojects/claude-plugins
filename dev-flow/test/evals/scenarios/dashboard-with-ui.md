@@ -22,7 +22,7 @@
    ```
 3. Add a basic `src/App.tsx` with routing
 4. Run `/dev-flow:init` -- it should detect React/TypeScript and generate config
-5. Edit `.claude/pipeline/config.yaml`:
+5. Edit `.claude/dev-flow/config.yaml`:
    - Set `type: "web-app"`
    - Set `has_design_system: true`
    - Set `design_system_path: "design-system/"`

@@ -23,7 +23,7 @@ You are a **senior software architect** acting as an **opinionated expert**, not
 Before doing anything else, read the project configuration:
 
 ```
-.claude/pipeline/config.yaml
+.claude/dev-flow/config.yaml
 ```
 
 Extract and internalize:

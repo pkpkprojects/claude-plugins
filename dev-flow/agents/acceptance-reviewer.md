@@ -22,7 +22,7 @@ You are the **final quality gate** before code is accepted into the project. You
 
 ### Step 1: Load Check Configuration
 
-Read `.claude/pipeline/review/checks.yaml` to load the active checks.
+Read `.claude/dev-flow/review/checks.yaml` to load the active checks.
 
 Expected structure of checks.yaml:
 ```yaml
@@ -88,8 +88,8 @@ checks:
 
 For monorepo projects, check resolution follows these rules:
 
-1. **Load root checks.yaml** from `.claude/pipeline/review/checks.yaml`
-2. **Load sub-project checks.yaml** from `.claude/pipeline/review/[sub-project]/checks.yaml` (if it exists)
+1. **Load root checks.yaml** from `.claude/dev-flow/review/checks.yaml`
+2. **Load sub-project checks.yaml** from `.claude/dev-flow/review/[sub-project]/checks.yaml` (if it exists)
 3. **Merge rules:**
    - A check present in root but absent from sub-project: **inherited as-is**
    - A check present in both root and sub-project: **sub-project version wins** (override)

@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-CONFIG_FILE=".claude/pipeline/config.yaml"
+CONFIG_FILE=".claude/dev-flow/config.yaml"
 
 # Exit silently if no config exists -- user has not run /dev-flow:init yet
 if [ ! -f "$CONFIG_FILE" ]; then

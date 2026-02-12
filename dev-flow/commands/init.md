@@ -1,11 +1,11 @@
 ---
-description: "Initialize pipeline configuration for current project - analyzes project structure and generates .claude/pipeline/ config"
+description: "Initialize pipeline configuration for current project - analyzes project structure and generates .claude/dev-flow/ config"
 argument-hint: "[optional: project directory path]"
 ---
 
 # dev-flow:init -- Project Configuration Generator
 
-This command analyzes the current project's structure and generates a `.claude/pipeline/` configuration directory with `config.yaml` and `review/checks.yaml` tailored to the detected technology stack.
+This command analyzes the current project's structure and generates a `.claude/dev-flow/` configuration directory with `config.yaml` and `review/checks.yaml` tailored to the detected technology stack.
 
 The optional argument `$ARGUMENTS` can be a path to the project root directory. If not provided, use the current working directory.
 
@@ -216,7 +216,7 @@ sub_projects:
     stack: ["go"]
 ```
 
-Write the generated config to `${PROJECT_ROOT}/.claude/pipeline/config.yaml` using the `Write` tool. Create the directory structure first with `Bash`: `mkdir -p ${PROJECT_ROOT}/.claude/pipeline/review`.
+Write the generated config to `${PROJECT_ROOT}/.claude/dev-flow/config.yaml` using the `Write` tool. Create the directory structure first with `Bash`: `mkdir -p ${PROJECT_ROOT}/.claude/dev-flow/review`.
 
 ### 4.3 Generate checks.yaml
 
@@ -239,7 +239,7 @@ Enable/disable optional checks based on detection:
 | `personas_compliance` | `has_design_system` is true (personas typically accompany design systems) |
 | `scalability` | `project.type` is `web-api` or `web-app` |
 
-Write the generated checks to `${PROJECT_ROOT}/.claude/pipeline/review/checks.yaml` using the `Write` tool.
+Write the generated checks to `${PROJECT_ROOT}/.claude/dev-flow/review/checks.yaml` using the `Write` tool.
 
 ---
 
@@ -247,7 +247,7 @@ Write the generated checks to `${PROJECT_ROOT}/.claude/pipeline/review/checks.ya
 
 If the project is a monorepo:
 
-1. For each detected sub-project, create `${PROJECT_ROOT}/.claude/pipeline/sub-projects/<name>/config.yaml` with sub-project-specific overrides.
+1. For each detected sub-project, create `${PROJECT_ROOT}/.claude/dev-flow/sub-projects/<name>/config.yaml` with sub-project-specific overrides.
 
 2. The sub-project config is a partial overlay -- it only needs to contain fields that differ from the root config. Example:
    ```yaml
@@ -277,9 +277,9 @@ Display a clear summary of what was detected and generated:
 - **Design System:** [yes/no - where]
 
 ### Files Created
-- `.claude/pipeline/config.yaml` -- main pipeline configuration
-- `.claude/pipeline/review/checks.yaml` -- review checks configuration
-[- `.claude/pipeline/sub-projects/<name>/config.yaml` -- for each sub-project, if monorepo]
+- `.claude/dev-flow/config.yaml` -- main pipeline configuration
+- `.claude/dev-flow/review/checks.yaml` -- review checks configuration
+[- `.claude/dev-flow/sub-projects/<name>/config.yaml` -- for each sub-project, if monorepo]
 
 ### Active Checks
 - [x] Tests pass (`[detected test command]`)
@@ -310,5 +310,5 @@ If any detection was uncertain, mention it explicitly so the user can correct it
 ## Error Handling
 
 - If `PROJECT_ROOT` does not exist or is not a directory, inform the user and stop.
-- If no project files are detected at all (no package.json, go.mod, composer.json, etc.), inform the user: "Could not detect project type. The default template will be used. Please edit `.claude/pipeline/config.yaml` to match your project."
-- If the `.claude/pipeline/` directory already exists, warn the user: "Pipeline configuration already exists. Proceeding will overwrite existing files. Continue? (yes/no)" -- use the interactive prompt to confirm before overwriting.
+- If no project files are detected at all (no package.json, go.mod, composer.json, etc.), inform the user: "Could not detect project type. The default template will be used. Please edit `.claude/dev-flow/config.yaml` to match your project."
+- If the `.claude/dev-flow/` directory already exists, warn the user: "Pipeline configuration already exists. Proceeding will overwrite existing files. Continue? (yes/no)" -- use the interactive prompt to confirm before overwriting.

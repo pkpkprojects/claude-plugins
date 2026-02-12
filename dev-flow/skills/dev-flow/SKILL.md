@@ -49,10 +49,10 @@ The user invokes dev-flow with either a file path or inline text. Your first job
 ### Step 1.3: Detect Project Context
 
 1. Determine the project root by looking for markers in the current working directory and parent directories:
-   - `.claude/pipeline/config.yaml` (primary marker)
+   - `.claude/dev-flow/config.yaml` (primary marker)
    - `.git/` directory
    - `package.json`, `go.mod`, `composer.json`, `Cargo.toml`, `pyproject.toml`
-2. If `.claude/pipeline/config.yaml` does not exist:
+2. If `.claude/dev-flow/config.yaml` does not exist:
    - Inform the user: "No pipeline configuration found. Run `/dev-flow:init` to set up the pipeline, or I can proceed with defaults."
    - Use `AskUserQuestion` to ask if the user wants to proceed with defaults or run init first.
    - If proceeding with defaults: use the built-in default configuration (see Section 2).
@@ -72,7 +72,7 @@ If `project.type` is `monorepo`:
 
 ### Step 2.1: Load Pipeline Config
 
-1. Read `.claude/pipeline/config.yaml` using the `Read` tool.
+1. Read `.claude/dev-flow/config.yaml` using the `Read` tool.
 2. Parse the YAML content and extract all configuration values into a structured object:
    - `project.name`
    - `project.type`
@@ -116,7 +116,7 @@ agents:
 
 ### Step 2.2: Load Review Checks
 
-1. Read `.claude/pipeline/checks.yaml` using the `Read` tool.
+1. Read `.claude/dev-flow/checks.yaml` using the `Read` tool.
 2. Parse the YAML content and extract all check definitions:
    - `standard` checks (always run)
    - `security` checks (run by security-reviewer)
@@ -127,9 +127,9 @@ agents:
 
 When `project.type` is `monorepo` and `TARGET_SUBPROJECTS` has been identified:
 
-1. The root `.claude/pipeline/config.yaml` serves as the **base configuration**.
+1. The root `.claude/dev-flow/config.yaml` serves as the **base configuration**.
 2. For each target sub-project, look for an override file at:
-   - `<sub_project_path>/.claude/pipeline/config.yaml`
+   - `<sub_project_path>/.claude/dev-flow/config.yaml`
 3. Apply inheritance rules to produce a **resolved configuration** per sub-project:
 
 **Inheritance Rules:**
@@ -145,8 +145,8 @@ When `project.type` is `monorepo` and `TARGET_SUBPROJECTS` has been identified:
 | Sub-project adds new checks | New checks are **added** to the root checks (extend, not replace) |
 
 4. Similarly resolve checks:
-   - Root `.claude/pipeline/checks.yaml` is the base.
-   - Sub-project `.claude/pipeline/checks.yaml` provides overrides.
+   - Root `.claude/dev-flow/checks.yaml` is the base.
+   - Sub-project `.claude/dev-flow/checks.yaml` provides overrides.
    - Apply the same inheritance logic: extend, not replace. A check with `run: false` in the sub-project disables that specific check.
 
 5. Store the resolved configuration as `RESOLVED_CONFIG` and resolved checks as `RESOLVED_CHECKS`.
@@ -945,9 +945,9 @@ If the user denies a tool permission (e.g., Bash execution):
 
 ### Missing Configuration
 
-If `.claude/pipeline/config.yaml` does not exist:
+If `.claude/dev-flow/config.yaml` does not exist:
 
-1. Inform the user: "No pipeline configuration found at `.claude/pipeline/config.yaml`."
+1. Inform the user: "No pipeline configuration found at `.claude/dev-flow/config.yaml`."
 2. Suggest: "Run `/dev-flow:init` to create one, or I can proceed with defaults."
 3. If proceeding with defaults:
    - Use the default configuration from Section 2.

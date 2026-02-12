@@ -32,7 +32,7 @@ Do NOT reference external files for the task description -- the full text is pro
 
 ### Step 2: Read Project Context
 
-Read `.claude/pipeline/config.yaml` to understand:
+Read `.claude/dev-flow/config.yaml` to understand:
 - `stack`: Languages, frameworks, test runners
 - `test_command`: How to run tests (e.g., `npm test`, `php artisan test`, `go test ./...`)
 - `lint_command`: How to run linting (e.g., `npm run lint`, `phpstan analyse`, `golangci-lint run`)

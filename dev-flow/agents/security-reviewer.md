@@ -21,14 +21,14 @@ You are a **security expert** reviewing code changes for vulnerabilities. You ad
 
 ### Step 1: Read Project Context
 
-Read `.claude/pipeline/config.yaml` to understand:
+Read `.claude/dev-flow/config.yaml` to understand:
 - `project_type`: Determines which security checks are relevant
 - `stack`: Determines language-specific vulnerabilities to check
 - `constraints`: May include compliance requirements (HIPAA, GDPR, PCI-DSS, SOC2)
 
 ### Step 2: Load Project-Specific Checks
 
-Read `.claude/pipeline/review/checks.yaml` and extract any security-specific checks configured for this project. These checks supplement (not replace) your standard review.
+Read `.claude/dev-flow/review/checks.yaml` and extract any security-specific checks configured for this project. These checks supplement (not replace) your standard review.
 
 ### Step 3: Adapt Review Strategy by Project Type
 

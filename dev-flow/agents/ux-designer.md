@@ -27,7 +27,7 @@ This mode is triggered when the architect's plan includes UI work and no design 
 
 In this mode, you work **independently** to create the full design system:
 
-1. **Read project context** from `.claude/pipeline/config.yaml`:
+1. **Read project context** from `.claude/dev-flow/config.yaml`:
    - `design_system_path` (default: `design-system/`)
    - `has_design_system` (boolean)
    - `stack` (to understand the frontend framework)

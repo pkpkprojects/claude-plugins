@@ -26,7 +26,7 @@ If `$ARGUMENTS` is empty, ask the user: "Please provide a task description or pa
 
 ### 0.2 Load Project Configuration
 
-1. **Read config:** Try to read `.claude/pipeline/config.yaml` using the `Read` tool.
+1. **Read config:** Try to read `.claude/dev-flow/config.yaml` using the `Read` tool.
    - If the file does not exist, print: "No pipeline config found. You can generate one with `/dev-flow:init`. Continuing with defaults."
    - Use these defaults when config is missing:
      ```
@@ -43,14 +43,14 @@ If `$ARGUMENTS` is empty, ask the user: "Please provide a task description or pa
      agents.pm.model: "haiku"
      ```
 
-2. **Read checks:** Try to read `.claude/pipeline/review/checks.yaml` (or `.claude/pipeline/checks.yaml`).
+2. **Read checks:** Try to read `.claude/dev-flow/review/checks.yaml` (or `.claude/dev-flow/checks.yaml`).
    - If not found, security and acceptance reviewers will use their built-in default checks.
 
 3. **Monorepo detection:** If `project.type` is `monorepo`, determine the relevant sub-project from:
    - The file path in `$ARGUMENTS` (if it points into a sub-project directory)
    - The current working directory
    - If ambiguous, ask the user which sub-project to target.
-   - Load the sub-project's config overlay if it exists at `.claude/pipeline/sub-projects/<name>/config.yaml`.
+   - Load the sub-project's config overlay if it exists at `.claude/dev-flow/sub-projects/<name>/config.yaml`.
 
 Store the resolved configuration as `CONFIG` for use throughout the pipeline.
 
