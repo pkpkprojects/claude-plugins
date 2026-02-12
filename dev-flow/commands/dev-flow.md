@@ -22,6 +22,8 @@ The argument is available as `$ARGUMENTS`.
 4. **Agent prompts are embedded below in the Appendices.** Do NOT try to read agent files from the plugin directory. Use the prompts from the Appendices directly.
 5. **Each subagent gets a FRESH dispatch** via `Task`. Never reuse agents across phases.
 6. **The only user interaction points are:** (a) approving the architect's plan, (b) approving the design system (if applicable), (c) escalation after 3 failed review iterations.
+7. **ALL teammate agents in Phase 3 MUST be spawned with `run_in_background: true`.** This is mandatory -- teammates work autonomously in the background. You (the orchestrator) monitor their progress. If you spawn a teammate WITHOUT `run_in_background: true`, the pipeline will block waiting for that single agent to finish instead of running agents in parallel.
+8. **Spawn ALL teammates in a SINGLE message** with multiple parallel Task tool calls. Do NOT spawn them one at a time.
 
 ---
 
@@ -288,7 +290,7 @@ TaskCreate(
 
 ### 3.3 Spawn Teammates
 
-Spawn **3 persistent agents** as team members. Each agent runs in the background and picks up tasks matching their role.
+Spawn **3 persistent agents** as team members (4 if UX work is needed). **ALL agents below MUST be spawned in a SINGLE message using parallel Task tool calls, and ALL MUST have `run_in_background: true`.** Do NOT spawn them sequentially -- send one message containing all 3-4 Task tool calls at once.
 
 **IMPORTANT:** All teammates MUST be spawned with `mode: "bypassPermissions"` so they can:
 - Access project files without re-asking for directory permissions on each spawn
