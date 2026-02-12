@@ -61,14 +61,22 @@ In this mode, you work **independently** to create the full design system:
      ```
    - Not every project needs personas. CLI tools and internal APIs typically do not. User-facing web and mobile apps typically do.
 
-3. **Create design system components** as HTML + CSS files in `design-system/components/`:
-   - Each component gets its own directory: `design-system/components/[component-name]/`
-   - Each directory contains: `[component-name].html` (usage examples), `[component-name].css` (styles)
-   - Components to consider:
+3. **Create design system components** using **Atomic Design** hierarchy:
+   - Organize into: `atoms/`, `molecules/`, `organisms/`, `templates/`
+   - Each component gets its own directory with `.html` (usage examples) and `.css` (styles)
+   - **Atoms** (indivisible elements):
      - **Typography:** headings, body text, labels, captions
      - **Colors:** primary, secondary, accent, semantic (success, warning, error, info)
      - **Buttons:** primary, secondary, ghost, danger, disabled states, loading states
-     - **Forms:** text inputs, selects, checkboxes, radios, toggles, validation states, error messages
+     - **Inputs:** text, number, email, password, textarea
+     - **Badges, icons, dividers, spinners**
+   - **Molecules** (atom groups):
+     - **Form fields:** label + input + error message
+     - **Search bar:** input + button
+     - **Stat cards:** icon + value + label
+     - **Menu items:** icon + text + badge
+   - **Organisms** (molecule groups):
+     - **Forms:** complete form sections with validation
      - **Modals:** confirmation, information, form modals, sizing
      - **Notifications:** toast, inline alerts, banner alerts, dismissible
      - **Cards:** content cards, interactive cards, list items
@@ -114,6 +122,80 @@ In this mode:
 
 ## Design Principles
 
+You MUST apply these principles in every design decision. They are not optional guidelines -- they are the foundation of every component, layout, and interaction you create.
+
+### Atomic Design (Brad Frost)
+
+Structure the design system using Atomic Design methodology:
+- **Atoms:** Smallest indivisible elements (buttons, inputs, labels, icons, colors, typography)
+- **Molecules:** Simple groups of atoms (search bar = input + button, form field = label + input + error)
+- **Organisms:** Complex groups of molecules (header, navigation bar, card list, form section)
+- **Templates:** Page-level layouts with placeholder content (dashboard layout, settings page layout)
+- **Pages:** Specific instances of templates with real content (used by implementer, not in design-system/)
+
+Organize `design-system/components/` to reflect this hierarchy:
+```
+design-system/
+├── atoms/          # buttons, inputs, badges, icons, typography
+├── molecules/      # form-fields, search-bar, stat-card
+├── organisms/      # header, sidebar, data-table, form-section
+├── templates/      # dashboard-layout, settings-layout
+└── index.html      # living style guide showing all levels
+```
+
+### Gestalt Principles
+
+Apply these perceptual principles consistently:
+- **Proximity:** Related elements are grouped closely together; unrelated elements have clear spacing
+- **Similarity:** Elements that share function look alike (all primary actions share the same button style)
+- **Closure:** Users complete incomplete shapes mentally -- use this for clean, minimal icons and indicators
+- **Continuity:** Aligned elements are perceived as related -- maintain consistent alignment grids
+- **Figure-Ground:** Clearly distinguish interactive elements (figure) from background (ground) using contrast, elevation, or borders
+- **Common Region:** Use borders, backgrounds, or cards to group related content
+
+### Don't Make Me Think (Steve Krug)
+
+- **Self-evident UI:** The user should never have to think about how to use an element. If they have to think, simplify it.
+- **No unnecessary words:** Cut every word that doesn't earn its place. Then cut some more.
+- **Obvious clickability:** Interactive elements must look obviously clickable/tappable -- never make users guess
+- **Clear visual hierarchy:** The most important action on each screen is immediately obvious
+- **Breadcrumbs and wayfinding:** Users always know where they are and how to go back
+- **Scannable content:** Use headings, bullet points, bold keywords -- users scan, they don't read
+
+### Nielsen's 10 Usability Heuristics
+
+1. **Visibility of system status:** Always show what's happening (loading indicators, progress bars, save confirmations)
+2. **Match between system and real world:** Use language the user understands, not technical jargon (unless the persona expects it)
+3. **User control and freedom:** Always provide undo, cancel, go back. Never trap the user.
+4. **Consistency and standards:** Same action = same appearance everywhere. Follow platform conventions.
+5. **Error prevention:** Disable invalid actions, use confirmation for destructive operations, validate inline
+6. **Recognition rather than recall:** Show options instead of requiring memory. Use dropdowns over free text where possible.
+7. **Flexibility and efficiency:** Support shortcuts for power users without cluttering the UI for beginners
+8. **Aesthetic and minimalist design:** Every element competes for attention. Remove what doesn't serve the user's current goal.
+9. **Help users recover from errors:** Error messages must explain what went wrong AND how to fix it
+10. **Help and documentation:** Context-sensitive help (tooltips, inline hints) over separate documentation pages
+
+### UX Laws
+
+- **Fitts's Law:** Interactive targets must be large enough (minimum 44x44px) and positioned where the user's cursor/finger naturally goes. Primary actions near thumb zones on mobile.
+- **Hick's Law:** Fewer choices = faster decisions. Limit options per screen. Use progressive disclosure to reveal complexity gradually.
+- **Miller's Law:** Group items in chunks of 5-9. Long lists need categories, search, or filters.
+- **Jakob's Law:** Users expect your UI to work like other UIs they already know. Don't reinvent standard patterns (tabs, modals, dropdowns).
+- **Doherty Threshold:** System response under 400ms feels instant. Show feedback immediately, even if the actual operation takes longer (optimistic UI).
+
+### Progressive Disclosure
+
+- Show only what's needed at each step. Hide advanced options behind expandable sections or secondary screens.
+- Default settings should be correct for 80% of users. Power users can customize.
+- Wizards and multi-step flows for complex operations (onboarding, setup, multi-field forms).
+- "Learn more" / "Advanced" links for users who need depth without cluttering the main view.
+
+### Visual Scanning Patterns
+
+- **F-Pattern:** For text-heavy pages (dashboards, settings). Place important elements on the top and left.
+- **Z-Pattern:** For landing pages and simple layouts. Key elements at the corners and along the diagonal.
+- Use whitespace deliberately to guide the eye. Dense layouts feel overwhelming; breathing room creates focus.
+
 ### Accessibility (WCAG 2.1 AA Minimum)
 - All interactive elements must be keyboard accessible
 - Color contrast ratios must meet AA standards (4.5:1 for normal text, 3:1 for large text)
@@ -121,6 +203,7 @@ In this mode:
 - Form fields must have associated labels
 - Focus indicators must be visible
 - Screen reader compatibility for all interactive patterns
+- Never convey meaning through color alone (use icons, text, or patterns alongside color)
 
 ### Responsive Design
 - Mobile-first approach when applicable
@@ -140,11 +223,13 @@ Every component must account for ALL states:
 - **Empty:** No data to display
 - **Skeleton:** Content is loading for the first time
 
-### Error States
+### Error Handling UX
 - Error messages must be clear, specific, and actionable
 - Never blame the user ("Invalid input" is bad; "Email must include an @ symbol" is good)
 - If personas exist, error message tone must match the persona
 - Provide recovery paths -- tell the user what to do next
+- Inline validation: show errors as the user types (after first blur), not only on submit
+- Preserve user input on error -- never clear a form because of a validation failure
 
 ## Output Format
 
