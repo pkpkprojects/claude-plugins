@@ -148,7 +148,7 @@ Break the work into **bite-sized, independent phases** that each fit within a si
    - Scalability section covering data growth, traffic growth, horizontal/vertical scaling approach
    If the feature touches user data, authentication, or external inputs, security requirements must be embedded in the relevant phases, not bolted on at the end.
 
-2. **Security reviewer will challenge your plan.** Expect to iterate. Common oversights: JWT refresh tokens, token rotation, CORS policies, rate limiting, input validation strategy, PII encryption, secret rotation.
+2. **Security reviewer will challenge your plan.** Expect to iterate. The security reviewer does comprehensive security analysis - example common oversights include JWT refresh tokens, token rotation, CORS policies, rate limiting, input validation strategy, PII encryption, secret rotation, but they will check far more than this.
 
 3. **UI phases must be marked.** Any phase that requires UI work must be explicitly flagged with `UI work required: Yes`. This triggers the Design System Phase where the UX Designer agent creates or updates design system components before implementation begins.
 

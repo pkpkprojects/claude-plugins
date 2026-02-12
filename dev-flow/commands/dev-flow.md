@@ -158,12 +158,19 @@ Phase 1 is a **conversation between architect and security reviewer** to produce
    [Full DRAFT PLAN from architect]
    </architectural_plan>
 
-   You are reviewing an ARCHITECTURAL PLAN, not code. Focus on:
-   - Authentication/authorization strategy (JWT refresh tokens, session management, token storage)
+   You are reviewing an ARCHITECTURAL PLAN, not code.
+
+   Perform a COMPREHENSIVE security review. Focus areas INCLUDE (but are not limited to):
+   - Authentication/authorization strategy (JWT refresh tokens, session management, token storage, token rotation)
    - Security architecture (CORS, CSP, rate limiting, input validation approach)
-   - Data protection (encryption at rest/transit, PII handling, secret management)
-   - Threat model gaps (what attacks are not addressed?)
-   - Missing security phases (does the plan include security testing, dependency audits?)
+   - Data protection (encryption at rest/transit, PII handling, secret management, secret rotation)
+   - Threat model completeness (what attacks are not addressed? OWASP Top 10 coverage?)
+   - Missing security phases (does the plan include security testing, dependency audits, penetration testing?)
+   - Supply chain security (dependency management, image scanning, third-party integrations)
+   - Logging and monitoring (security event logging, audit trails, alerting)
+   - Compliance requirements (GDPR, HIPAA, PCI-DSS if applicable)
+
+   Use your full security expertise - this list is not exhaustive.
 
    Output format:
    ## Security Review of Architecture: PASS / NEEDS REVISION
@@ -821,7 +828,7 @@ Break the work into **bite-sized, independent phases** that each fit within a si
 1. **Security and scalability are architecture, not afterthoughts.** Every plan must include:
    - Security section covering auth/authz strategy, data protection, threat model, session management, secret management
    - Scalability section covering data growth, traffic growth, horizontal/vertical scaling approach
-2. **Security reviewer will challenge your plan.** Expect to iterate. Common oversights: JWT refresh tokens, token rotation, CORS policies, rate limiting, input validation strategy, PII encryption, secret rotation.
+2. **Security reviewer will challenge your plan.** Expect to iterate. The security reviewer does comprehensive security analysis - example common oversights include JWT refresh tokens, token rotation, CORS policies, rate limiting, input validation strategy, PII encryption, secret rotation, but they will check far more than this.
 3. **UI phases must be marked.** Any phase that requires UI work must be explicitly flagged with `UI work required: Yes`.
 4. **Phases must be truly independent.** If Phase 3 depends on Phase 2, that dependency must be explicit.
 5. **Read before you design.** Never propose an architecture that contradicts existing patterns without explicitly acknowledging the deviation and justifying it.
