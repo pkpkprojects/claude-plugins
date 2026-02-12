@@ -210,236 +210,287 @@ The plan should contain phases, each with:
 
 ---
 
-## Phase 3: Implementation Loop
+## Phase 3: Team-Based Implementation
 
-**After the plan is approved (and design system if applicable), execute ALL phases autonomously.** Do NOT stop between phases to ask the user. Continue through the entire implementation loop.
+**After the plan is approved (and design system if applicable), use the Team/Task system to orchestrate implementation.** The Team system enforces the review pipeline through task dependencies -- agents CANNOT skip reviews because blocked tasks cannot be claimed.
 
-For each phase in `PLAN`, execute the following sub-pipeline. Process phases in dependency order -- phases with no dependencies can potentially be described together, but execute them sequentially to maintain context integrity.
+### 3.1 Create the Team
 
-### 3.1 Per-Phase UX Designer Update (Conditional)
+```
+TeamCreate(team_name="dev-flow-pipeline", description="Dev-flow implementation pipeline")
+```
 
-**Only if** the current phase has `ui_work_required: true` AND `CONFIG.project.has_design_system` is `true`:
+Create the reviews directory:
+```bash
+mkdir -p .claude/dev-flow/reviews
+```
 
-1. Build prompt using the UX DESIGNER PROMPT from **Appendix B**:
+### 3.2 Create All Tasks with Dependencies
+
+For each phase N in `PLAN`, create **3 tasks** with strict dependency chains:
+
+```
+TaskCreate(
+  subject="Phase N: Implement [phase title]",
+  description="[Phase description, files_to_touch, acceptance_criteria, UX_GUIDANCE if applicable]
+    Write implementation following TDD. Commit when done.
+    Write summary to .claude/dev-flow/reviews/phase-N-implementation.md",
+  activeForm="Implementing Phase N"
+)
+→ Store task ID as IMPL_N
+
+TaskCreate(
+  subject="Phase N: Security Review",
+  description="Review code changes from Phase N: [phase title].
+    Files to review: [files_to_touch]
+    Read the actual code using Glob/Grep/Read.
+    Read .claude/dev-flow/reviews/phase-N-implementation.md for context.
+    Write full review to .claude/dev-flow/reviews/phase-N-security.md
+    Format: ## Security Review: PASS or FAIL + findings",
+  activeForm="Security reviewing Phase N"
+)
+→ Store task ID as SEC_N
+→ TaskUpdate(taskId=SEC_N, addBlockedBy=[IMPL_N])
+
+TaskCreate(
+  subject="Phase N: Acceptance Review",
+  description="Verify Phase N: [phase title] meets acceptance criteria.
+    Acceptance criteria: [list from plan]
+    Read the code and .claude/dev-flow/reviews/phase-N-implementation.md
+    Read .claude/dev-flow/reviews/phase-N-security.md for security status.
+    Run test command and lint command from .claude/dev-flow/config.yaml.
+    Write full review to .claude/dev-flow/reviews/phase-N-acceptance.md
+    Format: ## Acceptance Review: PASS or FAIL + per-criterion results",
+  activeForm="Acceptance reviewing Phase N"
+)
+→ Store task ID as ACC_N
+→ TaskUpdate(taskId=ACC_N, addBlockedBy=[SEC_N])
+```
+
+**Cross-phase dependency:** Phase N+1's implementation is blocked by Phase N's acceptance review:
+```
+TaskUpdate(taskId=IMPL_(N+1), addBlockedBy=[ACC_N])
+```
+
+This creates a strict chain per phase: `Implement → Security → Acceptance` and across phases: `Phase N Acceptance → Phase N+1 Implement`.
+
+**UX Designer tasks** (only for phases with `ui_work_required: true`):
+```
+TaskCreate(
+  subject="Phase N: UX Design Update",
+  description="Check if Phase N needs new design system components. Create if needed.
+    Write guidance to .claude/dev-flow/reviews/phase-N-ux.md",
+  activeForm="Designing Phase N components"
+)
+→ Store task ID as UX_N
+→ TaskUpdate(taskId=IMPL_N, addBlockedBy=[UX_N])
+```
+
+### 3.3 Spawn Teammates
+
+Spawn **3 persistent agents** as team members. Each agent runs in the background and picks up tasks matching their role.
+
+**Implementer agent:**
+```
+Task(
+  name="implementer",
+  team_name="dev-flow-pipeline",
+  subagent_type="general-purpose",
+  model=CONFIG.agents.implementer.model,
+  run_in_background=true,
+  prompt="
+    <system>[IMPLEMENTER PROMPT from Appendix C]</system>
+    <project_config>[CONFIG]</project_config>
+    <extra_instructions>[CONFIG.agents.implementer.extra_instructions]</extra_instructions>
+    <full_plan>[Complete PLAN]</full_plan>
+
+    You are a TEAM MEMBER named 'implementer'. Your workflow:
+    1. Call TaskList to find available tasks (status=pending, no blockedBy, no owner)
+    2. Pick up tasks whose subject starts with 'Phase N: Implement'
+    3. Claim the task with TaskUpdate(owner='implementer', status='in_progress')
+    4. Implement following TDD methodology
+    5. Write summary to .claude/dev-flow/reviews/phase-N-implementation.md
+    6. Commit your changes
+    7. Mark task completed with TaskUpdate(status='completed')
+    8. Immediately check TaskList for the next available task
+    9. If no tasks available, wait -- new tasks may become unblocked
+
+    ALSO pick up tasks whose subject contains 'Fix' (feedback loop re-implementations).
+    When picking up fix tasks, read the feedback from the task description and address ALL issues.
+  "
+)
+```
+
+**Security reviewer agent:**
+```
+Task(
+  name="security-reviewer",
+  team_name="dev-flow-pipeline",
+  subagent_type="general-purpose",
+  model=CONFIG.agents.security-reviewer.model,
+  run_in_background=true,
+  prompt="
+    <system>[SECURITY REVIEWER PROMPT from Appendix D]</system>
+    <project_config>[CONFIG]</project_config>
+    <extra_instructions>[CONFIG.agents.security-reviewer.extra_instructions]</extra_instructions>
+    <checks>[Security checks from checks.yaml]</checks>
+
+    You are a TEAM MEMBER named 'security-reviewer'. Your workflow:
+    1. Call TaskList to find available tasks (status=pending, no blockedBy, no owner)
+    2. Pick up tasks whose subject starts with 'Phase N: Security Review'
+    3. Claim the task with TaskUpdate(owner='security-reviewer', status='in_progress')
+    4. Read .claude/dev-flow/reviews/phase-N-implementation.md for context
+    5. Use Glob, Grep, Read to examine the actual committed code
+    6. Write full review to .claude/dev-flow/reviews/phase-N-security.md
+    7. Mark task completed with TaskUpdate(status='completed')
+    8. Send message to team lead with PASS/FAIL result
+    9. Immediately check TaskList for the next available task
+  "
+)
+```
+
+**Acceptance reviewer agent:**
+```
+Task(
+  name="acceptance-reviewer",
+  team_name="dev-flow-pipeline",
+  subagent_type="general-purpose",
+  model=CONFIG.agents.acceptance-reviewer.model,
+  run_in_background=true,
+  prompt="
+    <system>[ACCEPTANCE REVIEWER PROMPT from Appendix E]</system>
+    <project_config>[CONFIG]</project_config>
+    <extra_instructions>[CONFIG.agents.acceptance-reviewer.extra_instructions]</extra_instructions>
+    <checks>[All checks from checks.yaml]</checks>
+
+    You are a TEAM MEMBER named 'acceptance-reviewer'. Your workflow:
+    1. Call TaskList to find available tasks (status=pending, no blockedBy, no owner)
+    2. Pick up tasks whose subject starts with 'Phase N: Acceptance Review'
+    3. Claim the task with TaskUpdate(owner='acceptance-reviewer', status='in_progress')
+    4. Read .claude/dev-flow/reviews/phase-N-implementation.md for implementation context
+    5. Read .claude/dev-flow/reviews/phase-N-security.md for security review results
+    6. Run test and lint commands from config
+    7. Write full review to .claude/dev-flow/reviews/phase-N-acceptance.md
+    8. Mark task completed with TaskUpdate(status='completed')
+    9. Send message to team lead with PASS/FAIL result
+    10. Immediately check TaskList for the next available task
+  "
+)
+```
+
+**UX Designer agent** (only if any phase has `ui_work_required: true`):
+```
+Task(
+  name="ux-designer",
+  team_name="dev-flow-pipeline",
+  subagent_type="general-purpose",
+  model=CONFIG.agents.ux-designer.model,
+  run_in_background=true,
+  prompt="
+    <system>[UX DESIGNER PROMPT from Appendix B]</system>
+    <project_config>[CONFIG]</project_config>
+    <extra_instructions>[CONFIG.agents.ux-designer.extra_instructions]</extra_instructions>
+    <design_system_summary>[DESIGN_SYSTEM]</design_system_summary>
+
+    You are a TEAM MEMBER named 'ux-designer'. Pick up UX Design tasks from TaskList.
+    Create needed design system components, write guidance, commit, mark task completed.
+  "
+)
+```
+
+### 3.4 Monitor Loop (Team Lead)
+
+You are the **team lead**. Monitor the pipeline until all tasks complete:
+
+```
+WHILE there are pending or in_progress tasks:
+  1. Call TaskList to check status
+  2. For each COMPLETED review task:
+     a. Read the review state file (.claude/dev-flow/reviews/phase-N-security.md or phase-N-acceptance.md)
+     b. Check if result is PASS or FAIL
+  3. If a review FAILED:
+     a. Check iteration count for that phase
+     b. If iterations < 3: Create feedback tasks (see 3.5 below)
+     c. If iterations >= 3: ESCALATE to user
+  4. Display status table to user (see below)
+  5. Wait for teammate messages (they arrive automatically)
+```
+
+**Display this status table** after each significant event:
+
+```
+## Pipeline Status
+| Phase | Title           | Implement | Security | Acceptance | Iter | Result |
+|-------|-----------------|-----------|----------|------------|------|--------|
+| 1     | [title]         | DONE      | PASS     | PASS       | 1    | OK     |
+| 2     | [title]         | DONE      | FAIL     | ...        | 1    | FIXING |
+| 3     | [title]         | PENDING   | BLOCKED  | BLOCKED    | 0    | ...    |
+```
+
+### 3.5 Feedback Loop (when a review FAILs)
+
+When a security or acceptance review returns FAIL:
+
+1. **Read the failure details** from the state file
+2. **Track iteration count** for this phase (start at 1, max 3)
+3. **Create new tasks:**
    ```
-   <system>
-   [UX DESIGNER PROMPT from Appendix B]
-   </system>
+   TaskCreate(
+     subject="Phase N: Fix [Security/Acceptance] Issues (iteration M)",
+     description="<feedback>[Full review feedback with specific issues]</feedback>
+       Fix ALL issues above. Do not introduce new functionality.
+       Write updated summary to .claude/dev-flow/reviews/phase-N-implementation.md",
+     activeForm="Fixing Phase N issues"
+   )
+   → Store as FIX_TASK_ID
 
-   <project_config>
-   [CONFIG]
-   </project_config>
+   TaskCreate(
+     subject="Phase N: Security Review (iteration M)",
+     description="Re-review Phase N after fixes. Same criteria as before.",
+     activeForm="Re-reviewing Phase N security"
+   )
+   → Store as RE_SEC_ID
+   → TaskUpdate(taskId=RE_SEC_ID, addBlockedBy=[FIX_TASK_ID])
 
-   <extra_instructions>
-   [CONFIG.agents.ux-designer.extra_instructions]
-   </extra_instructions>
-
-   <design_system_summary>
-   [DESIGN_SYSTEM from Phase 2, or current state if no Phase 2]
-   </design_system_summary>
-
-   <current_phase>
-   [Current phase details from PLAN]
-   </current_phase>
-
-   <mode>Implementation Loop (Per-Task)</mode>
-
-   Check if this phase needs any new design system components that do not exist yet.
-   If so, create them. Then provide the implementer with:
-   - Which design system components to use
-   - Any component-specific usage guidance
-   - Accessibility requirements for this phase
+   TaskCreate(
+     subject="Phase N: Acceptance Review (iteration M)",
+     description="Re-review Phase N after fixes. Same criteria as before.",
+     activeForm="Re-reviewing Phase N acceptance"
+   )
+   → Store as RE_ACC_ID
+   → TaskUpdate(taskId=RE_ACC_ID, addBlockedBy=[RE_SEC_ID])
    ```
+4. **Update cross-phase dependency:** Phase N+1's implementation should now be blocked by the NEW acceptance review task.
+5. **Continue monitoring** -- teammates will pick up the new tasks automatically.
 
-2. Dispatch via Task tool with `subagent_type="general-purpose"`.
-3. Store output as `UX_GUIDANCE` for this phase.
+**After 3 iterations without resolution:** ESCALATE to user.
+- Present all remaining failures
+- Ask the user to either:
+  a) Manually fix the issues and resume
+  b) Accept with known issues (record for PM report)
+  c) Abort the pipeline
 
-### 3.2 Implementer
+### 3.6 Pipeline Complete
 
-**IMPORTANT:** Each phase gets a FRESH subagent. Do not reuse implementer agents across phases.
+When ALL tasks in TaskList are completed:
 
-1. **Build the subagent prompt** using the IMPLEMENTER PROMPT from **Appendix C** below:
+1. **Verify all review files exist:**
+   ```bash
+   ls .claude/dev-flow/reviews/phase-*-security.md .claude/dev-flow/reviews/phase-*-acceptance.md
    ```
-   <system>
-   [IMPLEMENTER PROMPT from Appendix C]
-   </system>
-
-   <project_config>
-   [CONFIG]
-   </project_config>
-
-   <extra_instructions>
-   [CONFIG.agents.implementer.extra_instructions]
-   </extra_instructions>
-
-   <full_plan>
-   [Complete PLAN for context]
-   </full_plan>
-
-   <current_phase>
-   [Current phase details - title, description, files_to_touch, acceptance_criteria]
-   </current_phase>
-
-   <ux_guidance>
-   [UX_GUIDANCE from step 3.1, if applicable. Otherwise: "No UI work in this phase."]
-   </ux_guidance>
-
-   <previous_phases_summary>
-   [Brief summary of what previous phases accomplished, files created/modified]
-   </previous_phases_summary>
-
-   Implement this phase following TDD methodology:
-   1. Write failing tests first based on the acceptance criteria
-   2. Implement the minimum code to make tests pass
-   3. Refactor while keeping tests green
-   4. Ensure all acceptance criteria are met
+2. **Shut down teammates:**
    ```
-
-2. Dispatch via Task tool with `subagent_type="general-purpose"` and `model=CONFIG.agents.implementer.model`.
-
-3. Store the implementation output as `IMPLEMENTATION`.
-
-### 3.3 Security Reviewer
-
-**FRESH subagent for each phase.**
-
-1. **Build the subagent prompt** using the SECURITY REVIEWER PROMPT from **Appendix D** below:
+   SendMessage(type="shutdown_request", recipient="implementer", content="All tasks complete")
+   SendMessage(type="shutdown_request", recipient="security-reviewer", content="All tasks complete")
+   SendMessage(type="shutdown_request", recipient="acceptance-reviewer", content="All tasks complete")
+   SendMessage(type="shutdown_request", recipient="ux-designer", content="All tasks complete")  # if spawned
    ```
-   <system>
-   [SECURITY REVIEWER PROMPT from Appendix D]
-   </system>
-
-   <project_config>
-   [CONFIG]
-   </project_config>
-
-   <extra_instructions>
-   [CONFIG.agents.security-reviewer.extra_instructions]
-   </extra_instructions>
-
-   <checks>
-   [Security checks from checks.yaml, if loaded]
-   </checks>
-
-   <current_phase>
-   [Current phase details]
-   </current_phase>
-
-   <implementation_summary>
-   [IMPLEMENTATION output - what files were created/modified, key decisions]
-   </implementation_summary>
-
-   Review the implementation for security issues. Focus on:
-   - OWASP Top 10 vulnerabilities
-   - Input validation and sanitization
-   - Authentication and authorization
-   - Sensitive data handling
-   - Injection vulnerabilities
-   - Hardcoded secrets or credentials
-
-   Output format:
-   - PASS: No security issues found (with brief justification)
-   - FAIL: List each issue with severity (CRITICAL/HIGH/MEDIUM/LOW),
-     file location, description, and suggested fix
+3. **Clean up the team:**
    ```
-
-2. Dispatch via Task tool with `subagent_type="general-purpose"` and `model=CONFIG.agents.security-reviewer.model`.
-
-3. Store output as `SECURITY_REVIEW`.
-
-### 3.4 Acceptance Reviewer
-
-**FRESH subagent for each phase.**
-
-1. **Build the subagent prompt** using the ACCEPTANCE REVIEWER PROMPT from **Appendix E** below:
+   TeamDelete()
    ```
-   <system>
-   [ACCEPTANCE REVIEWER PROMPT from Appendix E]
-   </system>
-
-   <project_config>
-   [CONFIG]
-   </project_config>
-
-   <extra_instructions>
-   [CONFIG.agents.acceptance-reviewer.extra_instructions]
-   </extra_instructions>
-
-   <checks>
-   [Standard and optional checks from checks.yaml, if loaded]
-   </checks>
-
-   <current_phase>
-   [Current phase details with acceptance_criteria]
-   </current_phase>
-
-   <implementation_summary>
-   [IMPLEMENTATION output]
-   </implementation_summary>
-
-   <security_review>
-   [SECURITY_REVIEW output]
-   </security_review>
-
-   Review the implementation against:
-   1. All acceptance criteria for this phase
-   2. Active checks from the checks configuration
-   3. Security review findings (verify critical/high issues are addressed)
-   4. Code quality standards (test quality, no hardcoded secrets, linting)
-
-   Output format:
-   - PASS: All criteria met (with checklist showing each criterion status)
-   - FAIL: List each failed criterion with:
-     - Which criterion failed
-     - What was expected vs what was found
-     - Specific remediation instructions for the implementer
-   ```
-
-2. Dispatch via Task tool with `subagent_type="general-purpose"` and `model=CONFIG.agents.acceptance-reviewer.model`.
-
-3. Store output as `ACCEPTANCE_REVIEW`.
-
-### 3.5 Feedback Loop
-
-If `SECURITY_REVIEW` or `ACCEPTANCE_REVIEW` result in FAIL:
-
-1. **Iteration counter:** Track iterations for this phase. Maximum 3 iterations.
-
-2. **Construct feedback for implementer:**
-   ```
-   <feedback>
-   ## Security Review Findings
-   [SECURITY_REVIEW failures, if any]
-
-   ## Acceptance Review Findings
-   [ACCEPTANCE_REVIEW failures, if any]
-
-   Fix ALL issues listed above. Do not introduce new functionality.
-   Focus exclusively on addressing the review feedback.
-   </feedback>
-   ```
-
-3. **Re-dispatch implementer** (step 3.2) with the feedback appended to the prompt.
-
-4. **Re-run security reviewer** (step 3.3) on the updated implementation.
-
-5. **Re-run acceptance reviewer** (step 3.4) on the updated implementation.
-
-6. **If still failing after 3 iterations:** ESCALATE to the user.
-   - Present all remaining failures
-   - Ask the user to either:
-     a) Manually fix the issues and resume
-     b) Accept the current state with known issues
-     c) Abort the pipeline
-   - If the user chooses (b), record the accepted issues for the PM report.
-
-### 3.6 Phase Complete
-
-Once a phase passes both reviews (or the user accepts with known issues):
-- Record the phase outcome (PASS / PASS_WITH_ISSUES)
-- Record files created/modified
-- Record any accepted issues
-- **Immediately move to the next phase** in dependency order. Do NOT ask the user.
+4. **Collect phase outcomes** from all review state files.
+5. **Proceed to Phase 4 (PM Report).**
 
 ---
 
