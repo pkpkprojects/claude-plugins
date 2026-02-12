@@ -13,7 +13,24 @@ The argument is available as `$ARGUMENTS`.
 
 ## Phase 0: Parse Input and Load Configuration
 
-### 0.1 Parse Input
+### 0.1 Validate Arguments (MANDATORY - do this FIRST)
+
+**If `$ARGUMENTS` is empty or blank, STOP IMMEDIATELY.** Do not proceed with the pipeline. Instead, respond with:
+
+```
+This command requires a task description or path to a PRD file.
+
+Usage:
+  /dev-flow Add user authentication with JWT tokens
+  /dev-flow docs/prd/new-feature.md
+  /dev-flow "Refactor the payment module to support Stripe"
+```
+
+**Do NOT continue. Do NOT try to infer a task. Do NOT ask what the user wants.** Just show the usage message above and stop.
+
+### 0.2 Parse Input
+
+Only reach this step if `$ARGUMENTS` is non-empty.
 
 Examine `$ARGUMENTS` to determine the input type:
 
@@ -21,8 +38,6 @@ Examine `$ARGUMENTS` to determine the input type:
 - **Inline description:** Otherwise, treat the entire `$ARGUMENTS` string as an inline task description.
 
 Store the resolved text as `TASK_INPUT` for use throughout the pipeline.
-
-If `$ARGUMENTS` is empty, ask the user: "Please provide a task description or path to a PRD file. Example: `/dev-flow path/to/feature-prd.md` or `/dev-flow Add user authentication with JWT tokens`"
 
 ### 0.2 Load Project Configuration
 

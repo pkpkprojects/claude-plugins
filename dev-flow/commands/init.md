@@ -229,7 +229,14 @@ sub_projects:
     stack: ["go"]
 ```
 
-Write the generated config to `${PROJECT_ROOT}/.claude/dev-flow/config.yaml` using the `Write` tool. Create the directory structure first with `Bash`: `mkdir -p ${PROJECT_ROOT}/.claude/dev-flow/review`.
+**MANDATORY: You MUST write the config file. This is the primary deliverable of this command.**
+
+Execute these steps in order:
+1. Run: `mkdir -p ${PROJECT_ROOT}/.claude/dev-flow/review`
+2. Use the `Write` tool to write the complete YAML to `${PROJECT_ROOT}/.claude/dev-flow/config.yaml`
+3. Verify the file was created by reading it back with the `Read` tool
+
+If you skip writing the file, the entire init command has failed. The config file MUST exist on disk after this step.
 
 ### 4.3 Generate checks.yaml
 
@@ -252,7 +259,11 @@ Enable/disable optional checks based on detection:
 | `personas_compliance` | `has_design_system` is true (personas typically accompany design systems) |
 | `scalability` | `project.type` is `web-api` or `web-app` |
 
-Write the generated checks to `${PROJECT_ROOT}/.claude/dev-flow/review/checks.yaml` using the `Write` tool.
+**MANDATORY: You MUST write the checks file.**
+
+Use the `Write` tool to write the complete YAML to `${PROJECT_ROOT}/.claude/dev-flow/review/checks.yaml`. Verify it was created by reading it back.
+
+Both files (`config.yaml` and `review/checks.yaml`) MUST exist on disk before proceeding to Step 5.
 
 ---
 
