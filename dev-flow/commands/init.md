@@ -172,39 +172,66 @@ Detect the linter and lint command for `checks.yaml`:
 
 ---
 
-## Step 4: Select Template and Generate Configuration
+## Step 4: Generate Configuration
 
-### 4.1 Template Selection
+**IMPORTANT:** Do NOT try to read template files from the plugin directory. The templates are embedded below. Use them directly.
 
-Based on the detected stack, choose the most specific template from `templates/pipeline-config/`:
+### 4.1 Generate config.yaml
 
-| Detected stack | Template file | Notes |
-|---|---|---|
-| Symfony / PHP | `symfony-php.yaml` | If available, otherwise `default.yaml` |
-| Go | `go-api.yaml` | If available, otherwise `default.yaml` |
-| React + TypeScript | `react-ts.yaml` | If available, otherwise `default.yaml` |
-| Vue + TypeScript | `vue-ts.yaml` | If available, otherwise `default.yaml` |
-| Flutter / Dart | `flutter.yaml` | If available, otherwise `default.yaml` |
-| Any other | `default.yaml` | Always available as fallback |
+Use the following template. Replace placeholders with detected values:
 
-Try to read the specific template first. If it does not exist, fall back to `default.yaml`. Read the template file from the plugin's `templates/pipeline-config/` directory.
-
-### 4.2 Generate config.yaml
-
-Read the selected template and replace placeholders with detected values:
-
-| Placeholder | Value |
+| Placeholder | Replace with |
 |---|---|
 | `${PROJECT_NAME}` | Detected project name from package manager file |
-| `project.type` | Detected project type (cli, web-api, web-app, mobile, library, monorepo) |
-| `project.stack` | Array of detected stack tags, e.g., `["php", "symfony"]` or `["go"]` |
-| `project.has_db` | Detected database presence (true/false) |
-| `project.has_i18n` | Detected i18n presence (true/false) |
-| `project.has_design_system` | Detected design system presence (true/false) |
-| `project.design_system_path` | Detected design system path or default `"design-system/"` |
+| `"web-api"` (type) | Detected project type (cli, web-api, web-app, mobile, library, monorepo) |
+| `stack: []` | Array of detected stack tags, e.g., `["php", "symfony"]` or `["go"]` |
+| `has_db: false` | Detected database presence (true/false) |
+| `has_i18n: false` | Detected i18n presence (true/false) |
+| `has_design_system: false` | Detected design system presence (true/false) |
+| `design_system_path` | Detected design system path or default `"design-system/"` |
+
+Here is the complete config.yaml template -- copy it, fill in detected values, and write it:
+
+```yaml
+version: "1.0"
+
+project:
+  name: "${PROJECT_NAME}"
+  type: "web-api"
+  stack: []
+  has_db: false
+  has_i18n: false
+  has_design_system: false
+  design_system_path: "design-system/"
+
+agents:
+  architect:
+    model: "opus"
+    extra_instructions: ""
+
+  ux-designer:
+    model: "opus"
+    extra_instructions: ""
+
+  implementer:
+    model: "sonnet"
+    extra_instructions: ""
+
+  security-reviewer:
+    model: "sonnet"
+    extra_instructions: ""
+
+  acceptance-reviewer:
+    model: "sonnet"
+    extra_instructions: ""
+
+  pm:
+    model: "haiku"
+    extra_instructions: ""
+```
 
 **CRITICAL -- `agents:` section rules:**
-1. Copy the `agents:` section from the template EXACTLY as-is. Do NOT rename keys or change models.
+1. Copy the `agents:` section EXACTLY as shown above. Do NOT rename keys or change models.
 2. Agent keys MUST use **hyphens** (not underscores): `ux-designer`, `security-reviewer`, `acceptance-reviewer`
 3. Default models are FIXED and must NOT be changed:
    - `architect`: **opus**
@@ -238,16 +265,108 @@ Execute these steps in order:
 
 If you skip writing the file, the entire init command has failed. The config file MUST exist on disk after this step.
 
-### 4.3 Generate checks.yaml
+### 4.2 Generate checks.yaml
 
-Read the checks template from `templates/pipeline-config/default-checks.yaml`.
+**Do NOT read any template files.** Use the template embedded below directly.
 
-Replace placeholders:
+Replace these placeholders with detected values:
 
-| Placeholder | Value |
+| Placeholder | Replace with |
 |---|---|
-| `${TEST_COMMAND}` | Detected test command |
-| `${LINT_COMMAND}` | Detected lint command |
+| `${TEST_COMMAND}` | Detected test command (e.g., `go test ./...`, `npm test`) |
+| `${LINT_COMMAND}` | Detected lint command (e.g., `golangci-lint run`, `npx eslint .`) |
+
+Here is the complete checks.yaml template -- copy it, fill in detected values, and enable/disable optional checks:
+
+```yaml
+version: "1.0"
+
+standard:
+  - id: tests_pass
+    name: "Tests pass"
+    run: true
+    command: "${TEST_COMMAND}"
+
+  - id: tests_quality
+    name: "Test quality"
+    run: true
+    rules:
+      - "No trivial assertions (assertTrue(true) etc.)"
+      - "Each test verifies specific behavior"
+      - "Test names describe what they test"
+      - "No skipped tests without justification"
+
+  - id: no_hardcoded_secrets
+    name: "No hardcoded secrets"
+    run: true
+
+  - id: lint_passes
+    name: "Linter passes"
+    run: true
+    command: "${LINT_COMMAND}"
+
+security:
+  - id: owasp_top10
+    name: "OWASP Top 10"
+    run: true
+    scope: ["xss", "sql_injection", "broken_auth", "ssrf", "injection"]
+
+  - id: input_validation
+    name: "Input validation"
+    run: true
+    rules:
+      - "All user inputs sanitized"
+      - "Rate limiting on endpoints"
+
+  - id: sensitive_data
+    name: "Sensitive data handling"
+    run: true
+    rules:
+      - "Passwords hashed with bcrypt/argon2 + per-record salt"
+      - "PII encrypted at rest"
+      - "No sensitive data in logs"
+
+optional:
+  - id: db_migrations
+    name: "DB migrations"
+    run: false
+    rules:
+      - "Each schema change has a migration"
+      - "Migration has up and down"
+      - "Down is reversible"
+
+  - id: i18n
+    name: "Internationalization"
+    run: false
+    rules:
+      - "No hardcoded UI strings"
+      - "Translation keys in all locale files"
+
+  - id: design_system_compliance
+    name: "Design system compliance"
+    run: false
+    rules:
+      - "New UI components first in design-system/"
+      - "Code uses design-system components, not custom ones"
+      - "Consistent notification/alert/modal patterns"
+
+  - id: scalability
+    name: "Scalability"
+    run: false
+    rules:
+      - "No in-process memory cache (use Redis/Memcached)"
+      - "No file-based sessions"
+      - "Stateless API endpoints"
+
+  - id: personas_compliance
+    name: "Persona compliance"
+    run: false
+    rules:
+      - "UX messages match defined personas"
+      - "Tone of voice consistent with target persona"
+
+pm_suggestions: []
+```
 
 Enable/disable optional checks based on detection:
 
