@@ -240,8 +240,127 @@ agents:
    - `security-reviewer`: **sonnet**
    - `acceptance-reviewer`: **sonnet**
    - `pm`: **haiku**
-4. Only customize the `extra_instructions` field per agent based on what you detected about the project.
+4. Customize the `extra_instructions` field per agent based on detected stack (see 4.1.1 below).
 5. Do NOT add extra sections (like `infrastructure:` or `architecture:`) -- the config schema is defined by the template. Any project-specific context goes into agent `extra_instructions`.
+
+### 4.1.1 Stack-Specific Agent Instructions
+
+Based on the detected stack, populate `extra_instructions` for each agent. Use the guidance below. If multiple stacks are detected (e.g., Symfony + React), combine the relevant instructions.
+
+#### Symfony / PHP
+
+- **architect:**
+  ```
+  Symfony conventions: services autowired via services.yaml. Constructor injection only (no container->get()). Entities in src/Entity/, repositories in src/Repository/. Symfony Messenger for async. Database access through repositories only.
+  ```
+- **ux-designer:**
+  ```
+  Twig templates in templates/ following controller naming. Twig components + Stimulus for interactivity. Forms via Symfony Form component with form themes. Assets via AssetMapper or Webpack Encore.
+  ```
+- **implementer:**
+  ```
+  PHP 8.3+ with strict_types=1. PHP attributes for routes (#[Route]), ORM (#[ORM\Entity]), validation (#[Assert\...]). DTOs for request/response. Repository methods return typed collections. Symfony HttpKernel exceptions for errors. Services are final by default.
+  ```
+- **security-reviewer:**
+  ```
+  CSRF tokens on all state-changing forms (CsrfTokenManager). Twig autoescape ON; verify |raw usage justified. Doctrine parameter binding only (no string concat in DQL/SQL). Voters for authorization. #[IsGranted] or security.yaml access_control. Secrets in .env.local or vault, never .env.
+  ```
+- **acceptance-reviewer:**
+  ```
+  Functional tests use WebTestCase. Database tests with isolated transactions (DAMADoctrineTestBundle). API tests verify JSON schema + status codes + error responses. Console commands have integration tests.
+  ```
+
+#### Go
+
+- **architect:**
+  ```
+  Prefer stdlib over third-party; justify every dependency. Standard layout: cmd/, internal/, pkg/. Interfaces at consumer side. Constructor DI, no globals. Config via env vars (12-factor). Errors: wrap with fmt.Errorf("context: %w", err).
+  ```
+- **ux-designer:**
+  ```
+  API-only: focus on API ergonomics. Consistent endpoint naming (REST or gRPC). Meaningful HTTP status codes and error bodies. OpenAPI/Protobuf as design artifact.
+  ```
+- **implementer:**
+  ```
+  go fmt/goimports enforced. context.Context as first param for I/O. Table-driven tests with testify. Errors never ignored. Goroutines have shutdown path (errgroup). Structured logging (slog/zerolog), no fmt.Println.
+  ```
+- **security-reviewer:**
+  ```
+  SQL: parameterized queries only ($1, ?), no string concat. HTTP: validate Content-Type, set security headers. Secrets from env/secrets manager. TLS enforced for outbound. go test -race for concurrency. HTTP clients must have timeouts.
+  ```
+- **acceptance-reviewer:**
+  ```
+  go test -race -count=1 ./... must pass. New code includes tests. Integration tests use testcontainers-go. Benchmarks for hot paths.
+  ```
+
+#### React + TypeScript
+
+- **architect:**
+  ```
+  Functional components only. State: React Context (simple) or Zustand/Redux Toolkit (complex). Data: TanStack Query with typed hooks. Routing: React Router v6+ typed. TypeScript strict mode. Feature-based folders: src/features/<feature>/{components,hooks,api,types}.
+  ```
+- **ux-designer:**
+  ```
+  design-system/ is source of truth. Design tokens for colors/spacing/typography. WCAG 2.1 AA. Loading/error/empty states everywhere. Mobile-first responsive. Animations via CSS transitions or Framer Motion.
+  ```
+- **implementer:**
+  ```
+  TypeScript strict: no any, no non-null assertions without comment. Explicit prop interfaces. Custom hooks prefixed use*. Minimize useEffect; prefer derived state. React Testing Library (user-centric queries). Co-locate tests. CSS Modules/Tailwind/styled-components matching project style.
+  ```
+- **security-reviewer:**
+  ```
+  No dangerouslySetInnerHTML without DOMPurify. URLs validated before href/src. Tokens in httpOnly cookies, not localStorage. CORS reviewed. npm audit. CSP headers.
+  ```
+- **acceptance-reviewer:**
+  ```
+  React Testing Library (render + user events). Hooks tested with renderHook. Accessibility with jest-axe. No console.error/warn in test output.
+  ```
+
+#### Vue + TypeScript
+
+- **architect:**
+  ```
+  Composition API only. Pinia stores (one per domain). Vue Router 4 typed. TypeScript strict. Feature-based folders: src/features/<feature>/{components,composables,stores,types}. API: typed HTTP client with interceptors.
+  ```
+- **ux-designer:**
+  ```
+  design-system/ is source of truth. CSS custom properties for tokens. WCAG 2.1 AA. Loading/error/empty states. Mobile-first. Vue <Transition>/<TransitionGroup> for state changes.
+  ```
+- **implementer:**
+  ```
+  TypeScript strict: no any. <script setup lang="ts">. defineProps<T>(), defineEmits<T>(). Composables prefixed use*. ref() default, reactive() for objects. Computed over watchers. Pinia setup syntax. Vitest + Vue Test Utils. Co-locate tests. Scoped styles default.
+  ```
+- **security-reviewer:**
+  ```
+  No v-html without DOMPurify. URLs validated before :href/:src. Tokens in httpOnly cookies. CORS reviewed. npm audit. CSP headers. Route guards enforce auth.
+  ```
+- **acceptance-reviewer:**
+  ```
+  Vue Test Utils (mount + trigger). Composables tested independently. Pinia stores tested in isolation. vitest-axe for a11y. No console.error/warn in test output.
+  ```
+
+#### Flutter / Dart
+
+- **architect:**
+  ```
+  BLoC/Cubit with flutter_bloc. Repository pattern (local + remote sources). Feature-based: lib/features/<feature>/{bloc,models,pages,widgets}. Shared in lib/core/. GoRouter typed routes. DI: get_it + injectable. Freezed for immutable models.
+  ```
+- **ux-designer:**
+  ```
+  Design system widgets in design-system/ or lib/core/widgets/. Material Design 3 or Cupertino. Theme extensions for tokens. Every screen has loading/error/empty states. Built-in animations. LayoutBuilder/MediaQuery for responsive. Semantics for a11y, 48x48dp touch targets.
+  ```
+- **implementer:**
+  ```
+  Strict analysis options. Const constructors. Small widgets (<50 lines build). BLoC: sealed events, freezed states. No business logic in widgets. Widget tests + bloc tests with blocTest(). Golden tests for design-system. Extension methods for context helpers.
+  ```
+- **security-reviewer:**
+  ```
+  flutter_secure_storage, not SharedPreferences for secrets. No hardcoded API keys (--dart-define). Certificate pinning in production. No sensitive data in logs. --obfuscate --split-debug-info for release. Minimal permissions. Deep links validated.
+  ```
+- **acceptance-reviewer:**
+  ```
+  Widget tests for interactive components. BLoC tests cover all events/states. Golden tests for design-system. Integration tests for critical flows. No print() in production.
+  ```
 
 For monorepo projects, add a `sub_projects` section:
 ```yaml
@@ -377,6 +496,182 @@ Enable/disable optional checks based on detection:
 | `design_system_compliance` | `has_design_system` is true |
 | `personas_compliance` | `has_design_system` is true (personas typically accompany design systems) |
 | `scalability` | `project.type` is `web-api` or `web-app` |
+
+### 4.2.1 Stack-Specific Checks and Rule Customizations
+
+Based on the detected stack, **add extra checks** to the `security` section and **customize rules** in existing checks. Append these to the base template above.
+
+#### Symfony / PHP
+
+Add to `security` section:
+```yaml
+  - id: symfony_security
+    name: "Symfony-specific security"
+    run: true
+    rules:
+      - "CSRF protection enabled on all state-changing forms"
+      - "Twig autoescape ON globally; |raw usage justified in comments"
+      - "Doctrine parameter binding only (no string interpolation in DQL/SQL)"
+      - "Voters used for complex authorization, not inline role checks"
+      - "Secrets stored in Symfony vault or .env.local, never .env"
+```
+
+Customize existing rules:
+- `tests_quality`: add rule `"WebTestCase used for controller tests, not unit mocks"`
+- `input_validation`: replace rules with `"All user inputs validated via Symfony Validator constraints"`, `"Form types define allowed fields explicitly (no extra_fields)"`, `"Rate limiting on authentication and public endpoints (RateLimiter component)"`
+- `sensitive_data`: replace rules with `"Passwords hashed with password_hashers (bcrypt/argon2id) in security.yaml"`, `"PII encrypted at rest via Doctrine lifecycle listeners or value objects"`, `"No sensitive data in logs (Monolog processors scrub PII)"`
+- `db_migrations`: enable (`run: true`), customize rules with `"Doctrine migration (doctrine:migrations:diff)"`, `"Migration has up() and down() methods"`, `"down() is reversible and tested"`, `"No raw SQL in migrations unless Doctrine DBAL cannot express it"`
+- Default test command: `php bin/phpunit`
+- Default lint command: `php vendor/bin/phpstan analyse -l 6 src/`
+
+#### Go
+
+Add to `security` section:
+```yaml
+  - id: go_security
+    name: "Go-specific security"
+    run: true
+    rules:
+      - "database/sql parameterized queries only (no string concatenation)"
+      - "HTTP clients have timeouts set"
+      - "TLS certificate verification not disabled"
+      - "No unsafe package usage without justification"
+      - "go test -race passes (no data races)"
+```
+
+Customize existing rules:
+- `tests_quality`: add rule `"Table-driven tests for multiple input variations"`, replace test name rule with `"Test names follow Go convention: TestFunctionName_Scenario"`
+- `input_validation`: add rules `"Request body size limited (http.MaxBytesReader)"`, `"Path and query parameters validated and typed"`
+- `sensitive_data`: add rule `"Secrets loaded from environment, not config files"`
+- `db_migrations`: customize rules with `"Migration has up and down (golang-migrate or goose)"`
+- `scalability`: add rules `"Graceful shutdown with signal handling"`, `"Health and readiness endpoints for orchestrators"`
+- Default test command: `go test -race -count=1 ./...`
+- Default lint command: `golangci-lint run`
+
+#### React + TypeScript
+
+Add to `security` section:
+```yaml
+  - id: react_security
+    name: "React-specific security"
+    run: true
+    rules:
+      - "No dangerouslySetInnerHTML without DOMPurify sanitization"
+      - "User URLs validated before href/src rendering"
+      - "npm audit shows no high/critical vulnerabilities"
+      - "CSP headers configured (no unsafe-inline if possible)"
+```
+
+Add to `standard` section:
+```yaml
+  - id: type_check
+    name: "TypeScript type check"
+    run: true
+    command: "npx tsc --noEmit"
+```
+
+Add to `optional` section:
+```yaml
+  - id: accessibility
+    name: "Accessibility (a11y)"
+    run: true
+    rules:
+      - "All interactive elements keyboard accessible"
+      - "Semantic HTML elements used (button, nav, main, etc.)"
+      - "ARIA attributes correct and not redundant"
+      - "Color contrast meets WCAG 2.1 AA (4.5:1 text, 3:1 large text)"
+      - "Focus management on route changes and modal open/close"
+```
+
+Customize existing rules:
+- `tests_quality`: add rule `"Uses Testing Library queries (getByRole, getByText), not getByTestId as first choice"`
+- `input_validation`: replace rules with `"Form inputs validated client-side (Zod, Yup, or native validation)"`, `"API responses validated/typed before use"`, `"File uploads restricted by type and size"`
+- `sensitive_data`: replace rules with `"No secrets or API keys in client-side code"`, `"Auth tokens in httpOnly cookies, not localStorage"`, `"No PII in console.log or error tracking payloads"`
+- `design_system_compliance`: enable (`run: true`), add rule `"Design tokens used for colors, spacing, typography (no magic values)"`
+- Default test command: `npm test -- --watchAll=false` (or `npx vitest run` if Vitest detected)
+- Default lint command: `npx eslint .`
+
+#### Vue + TypeScript
+
+Add to `security` section:
+```yaml
+  - id: vue_security
+    name: "Vue-specific security"
+    run: true
+    rules:
+      - "No v-html without DOMPurify sanitization"
+      - "User URLs validated before :href/:src binding"
+      - "npm audit shows no high/critical vulnerabilities"
+      - "CSP headers configured (no unsafe-inline if possible)"
+      - "Router guards enforce auth on protected routes"
+```
+
+Add to `standard` section:
+```yaml
+  - id: type_check
+    name: "TypeScript type check"
+    run: true
+    command: "npx vue-tsc --noEmit"
+```
+
+Add to `optional` section:
+```yaml
+  - id: accessibility
+    name: "Accessibility (a11y)"
+    run: true
+    rules:
+      - "All interactive elements keyboard accessible"
+      - "Semantic HTML elements used (button, nav, main, etc.)"
+      - "ARIA attributes correct and not redundant"
+      - "Color contrast meets WCAG 2.1 AA (4.5:1 text, 3:1 large text)"
+      - "Focus management on route changes and modal open/close"
+```
+
+Customize existing rules:
+- `tests_quality`: add rule `"Uses Vue Test Utils queries and trigger() for user interaction"`
+- `input_validation`: replace rules with `"Form inputs validated client-side (Zod, Valibot, VeeValidate, or native)"`, `"API responses validated/typed before use"`, `"File uploads restricted by type and size"`
+- `sensitive_data`: replace rules with `"No secrets or API keys in client-side code"`, `"Auth tokens in httpOnly cookies, not localStorage"`, `"No PII in console.log or error tracking payloads"`
+- `design_system_compliance`: enable (`run: true`), add rule `"Design tokens (CSS custom properties) used for colors, spacing, typography"`
+- Default test command: `npx vitest run`
+- Default lint command: `npx eslint .`
+
+#### Flutter / Dart
+
+Add to `security` section:
+```yaml
+  - id: mobile_security
+    name: "Mobile-specific security"
+    run: true
+    rules:
+      - "Certificate pinning configured for production API endpoints"
+      - "API keys not hardcoded (use --dart-define or env-based injection)"
+      - "Release builds use --obfuscate --split-debug-info"
+      - "Minimum platform permissions requested"
+      - "No print()/debugPrint() in release code"
+      - "Jailbreak/root detection considered for sensitive apps"
+```
+
+Add to `optional` section:
+```yaml
+  - id: accessibility
+    name: "Accessibility (a11y)"
+    run: true
+    rules:
+      - "Semantics widgets used for screen readers"
+      - "Touch targets at least 48x48 dp"
+      - "Color contrast meets WCAG 2.1 AA"
+      - "Text scales with system font size setting"
+      - "Focus traversal order logical"
+```
+
+Customize existing rules:
+- `owasp_top10`: change scope to `["insecure_storage", "insecure_communication", "broken_auth", "injection"]`
+- `tests_quality`: add rules `"Widget tests use find.byType, find.text, find.byKey appropriately"`, `"BLoC tests cover all event-to-state transitions"`
+- `input_validation`: replace rules with `"All form inputs validated (TextFormField validators)"`, `"API responses validated and typed before use"`, `"Deep link parameters validated and sanitized"`
+- `sensitive_data`: replace rules with `"Credentials in flutter_secure_storage, not SharedPreferences"`, `"No PII in logs or analytics events"`, `"Biometric auth for sensitive operations where appropriate"`
+- `design_system_compliance`: enable (`run: true`), add rules `"Theme extensions used for custom design tokens"`, `"Golden tests exist for design-system widgets"`
+- Default test command: `flutter test`
+- Default lint command: `flutter analyze`
 
 **MANDATORY: You MUST write the checks file.**
 
