@@ -203,6 +203,19 @@ Read the selected template and replace placeholders with detected values:
 | `project.has_design_system` | Detected design system presence (true/false) |
 | `project.design_system_path` | Detected design system path or default `"design-system/"` |
 
+**CRITICAL -- `agents:` section rules:**
+1. Copy the `agents:` section from the template EXACTLY as-is. Do NOT rename keys or change models.
+2. Agent keys MUST use **hyphens** (not underscores): `ux-designer`, `security-reviewer`, `acceptance-reviewer`
+3. Default models are FIXED and must NOT be changed:
+   - `architect`: **opus**
+   - `ux-designer`: **opus**
+   - `implementer`: **sonnet**
+   - `security-reviewer`: **sonnet**
+   - `acceptance-reviewer`: **sonnet**
+   - `pm`: **haiku**
+4. Only customize the `extra_instructions` field per agent based on what you detected about the project.
+5. Do NOT add extra sections (like `infrastructure:` or `architecture:`) -- the config schema is defined by the template. Any project-specific context goes into agent `extra_instructions`.
+
 For monorepo projects, add a `sub_projects` section:
 ```yaml
 sub_projects:
