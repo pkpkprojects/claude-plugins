@@ -1,0 +1,27 @@
+{
+  "name": "dev-flow",
+  "version": "1.0.0",
+  "description": "Full development workflow orchestrator - from PRD to committed, reviewed code. Includes architect, UX designer, implementer, security reviewer, acceptance gate, and PM oversight.",
+  "author": {
+    "name": "pkpk_projects",
+    "email": "dev@pkpkprojects.com"
+  },
+  "license": "MIT",
+  "keywords": [
+    "workflow",
+    "orchestrator",
+    "tdd",
+    "security-review",
+    "design-system",
+    "pipeline",
+    "dev-flow"
+  ],
+  "agents": [
+    "./agents/architect.md",
+    "./agents/ux-designer.md",
+    "./agents/implementer.md",
+    "./agents/security-reviewer.md",
+    "./agents/acceptance-reviewer.md",
+    "./agents/pm.md"
+  ]
+}
