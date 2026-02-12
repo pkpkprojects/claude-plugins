@@ -290,10 +290,12 @@ TaskCreate(
 
 Spawn **3 persistent agents** as team members. Each agent runs in the background and picks up tasks matching their role.
 
-**IMPORTANT:** All teammates MUST be spawned with `mode: "dontAsk"` so they can run Bash commands (tests, lint, git) without requiring user approval for each command. This is safe because:
-- Implementer: needs to run tests, lint, git commit
-- Security reviewer: needs to run security audit commands, grep, test commands
-- Acceptance reviewer: needs to run test suite, lint, build commands
+**IMPORTANT:** All teammates MUST be spawned with `mode: "bypassPermissions"` so they can:
+- Access project files without re-asking for directory permissions on each spawn
+- Run Bash commands (tests, lint, git, security audits) without approval prompts
+- Read and write files in the project directory freely
+
+This is safe because the user explicitly invoked `/dev-flow` in their project directory.
 
 **Implementer agent:**
 ```
@@ -302,7 +304,7 @@ Task(
   team_name="dev-flow-pipeline",
   subagent_type="general-purpose",
   model=CONFIG.agents.implementer.model,
-  mode="dontAsk",
+  mode="bypassPermissions",
   run_in_background=true,
   prompt="
     <system>[IMPLEMENTER PROMPT from Appendix C]</system>
@@ -334,7 +336,7 @@ Task(
   team_name="dev-flow-pipeline",
   subagent_type="general-purpose",
   model=CONFIG.agents.security-reviewer.model,
-  mode="dontAsk",
+  mode="bypassPermissions",
   run_in_background=true,
   prompt="
     <system>[SECURITY REVIEWER PROMPT from Appendix D]</system>
@@ -363,7 +365,7 @@ Task(
   team_name="dev-flow-pipeline",
   subagent_type="general-purpose",
   model=CONFIG.agents.acceptance-reviewer.model,
-  mode="dontAsk",
+  mode="bypassPermissions",
   run_in_background=true,
   prompt="
     <system>[ACCEPTANCE REVIEWER PROMPT from Appendix E]</system>
@@ -393,7 +395,7 @@ Task(
   team_name="dev-flow-pipeline",
   subagent_type="general-purpose",
   model=CONFIG.agents.ux-designer.model,
-  mode="dontAsk",
+  mode="bypassPermissions",
   run_in_background=true,
   prompt="
     <system>[UX DESIGNER PROMPT from Appendix B]</system>
