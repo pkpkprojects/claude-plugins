@@ -330,18 +330,20 @@ Do you approve the design system? You can:
 
 ## 5. Implementation Loop (Per Phase, Autonomous)
 
-This is the core execution loop. For each phase in the `APPROVED_PLAN`, execute the implementation-review cycle.
+This is the core execution loop. The orchestrator manages **2 implementer slots** that run phases through the implementation-review cycle.
 
 ### Phase Execution Order
 
 1. Determine execution order from `DEPENDENCY_GRAPH`:
-   - Phases with no dependencies execute first.
-   - Phases in the same `PARALLEL_GROUP` with all dependencies satisfied can be dispatched simultaneously.
-   - Phases with unmet dependencies wait.
+   - Phases with no dependencies are `READY` first.
+   - Up to 2 phases can execute concurrently (one per implementer slot), provided they have no file overlap (§3.1b).
+   - Phases with unmet dependencies remain `WAITING`.
 
-2. For each phase (or parallel group of phases), execute Steps 5a through 5e.
+2. For each ready phase, the orchestrator assigns it to a free implementer slot and executes Steps 5a through 5e.
 
-3. Track phase status: `PENDING`, `IN_PROGRESS`, `REVIEW`, `PASSED`, `FAILED`, `ESCALATED`.
+3. Track phase status: `WAITING`, `READY`, `IN_PROGRESS`, `REVIEW`, `FIXING`, `COMPLETE`, `SKIPPED`, `ESCALATED`.
+
+4. **Implementer lifecycle:** Fresh agent spawned per phase. Same agent reused for fix iterations within the same phase. Agent shut down when phase completes.
 
 ### Step 5a: Pre-Implementation Design Update (Conditional)
 
@@ -358,20 +360,15 @@ If triggered:
 2. The designer updates the design system.
 3. No user approval needed for incremental updates (the overall design system was already approved).
 
-### Step 5b: Implementation
+### Step 5b: Implementation (via Implementer Slots)
 
-Dispatch an **implementer agent** as a **fresh subagent** (new Task, NEVER resume a previous agent):
-
-```
-Tool: Task
-subagent_type: general-purpose
-```
+The orchestrator spawns a **fresh implementer agent** in an available slot (§3.3b in dev-flow.md). Each implementer receives ONLY its assigned phase — not the full plan.
 
 **Prompt must include ALL of the following inline (CRITICAL: pass complete text, NOT file paths):**
 
-1. **Role assignment**: "You are the implementer agent. Your job is to write production-quality code following TDD."
+1. **Role assignment**: "You are implementer-{slot}. Your job is to write production-quality code following TDD for this specific phase."
 
-2. **Full phase description**: The complete text of this phase from the approved plan, including:
+2. **Single phase description**: The complete text of THIS phase only, including:
    - Phase title and description
    - Files to touch
    - Acceptance criteria
@@ -416,6 +413,7 @@ subagent_type: general-purpose
    - Refactor unrelated code
    - Add "nice to have" features not in the acceptance criteria
    - Modify files not listed in "Files to touch" unless absolutely necessary
+   After completing, STOP. Do NOT search TaskList for more tasks.
    ```
 
 ### Step 5c: Security Review
@@ -579,26 +577,31 @@ Combine all failure feedback into a single feedback document:
 {Recommendations from reviewers}
 ```
 
-**Step 5e.2: Dispatch Implementer for Fixes**
+**Step 5e.2: Send Feedback to the SAME Implementer**
 
-Create a **new Task** (fresh subagent, NEVER resume the previous implementer):
+The orchestrator sends review feedback to the **same implementer agent** that built the phase (context preserved — the agent still knows what it built):
 
-**Prompt must include:**
+```
+SendMessage(
+  type="message",
+  recipient="implementer-{slot}",
+  content="Phase N review failed. Fix task ID: {FIX_TASK_ID}.
+    Feedback: {full feedback document from Step 5e.1}.
+    Pick up the fix task, address ALL issues, commit, and mark completed.",
+  summary="Fix Phase N review issues"
+)
+```
 
-1. **Role assignment**: "You are the implementer agent. Fix the issues identified by reviewers."
-2. **Original phase description**: The full phase text from the plan.
-3. **Reviewer feedback**: The complete feedback document from Step 5e.1.
-4. **The current state of files**: Use `git diff HEAD~1 HEAD` so the implementer can see what was already done.
-5. **Fix instruction**:
-   ```
-   Address EVERY finding listed in the reviewer feedback. For each fix:
-   1. Write or update a test that covers the issue.
-   2. Implement the fix.
-   3. Run tests to verify: {test_command}
-   4. Run linter: {lint_command}
-   5. Commit the fix with message: "fix: [Phase title] - address review feedback (iteration {N})"
-   ```
-6. **Scope instruction**: "Fix ONLY the issues identified in the feedback. Do not make other changes."
+The implementer then:
+1. Picks up the fix task via TaskUpdate
+2. Addresses every finding in the feedback
+3. Writes or updates tests for each issue
+4. Runs tests and linter
+5. Commits with message: "fix: [Phase title] - address review feedback (iteration {N})"
+6. Marks the fix task completed
+7. Stops and waits for further instructions
+
+**Context overflow safeguard:** After 2 fix iterations with the same agent, if reviews still fail, shut down the agent and spawn a fresh one with a summary of all previous attempts and the current git diff.
 
 **Step 5e.3: Re-Run Failing Reviews**
 
@@ -611,7 +614,7 @@ After the implementer completes fixes:
 **Step 5e.4: Evaluate and Loop**
 
 - Increment `iteration_count`.
-- If all reviews now pass: Mark phase as `PASSED`. Move to next phase.
+- If all reviews now pass: Mark phase as `COMPLETE`. Shutdown implementer, free the slot. Move to next phase.
 - If any review still fails AND `iteration_count < MAX_ITERATIONS`: Go back to Step 5e.1.
 - If `iteration_count >= MAX_ITERATIONS`: Proceed to Step 5e.5 (Escalation).
 
@@ -828,13 +831,20 @@ Would you like to:
 
 ## Key Patterns
 
-### Fresh Subagent Per Task
+### Fresh Agent Per Phase, Same Agent for Fixes
 
-**CRITICAL**: Always dispatch agents using the `Task` tool, creating a NEW subagent for each dispatch. Never attempt to "resume" a previous agent. Reasons:
+**CRITICAL**: Implementer agents follow a per-phase lifecycle:
 
-- Context isolation prevents cross-contamination between phases.
-- Failed agents do not corrupt the state for retry attempts.
-- Each agent gets a clean context window optimized for its specific task.
+- **New phase** → spawn a FRESH agent (clean context, no carry-over from previous phases)
+- **Review feedback** → send to the SAME agent via SendMessage (context preserved — the agent remembers what it built)
+- **Phase complete** → shutdown the agent, free the slot
+
+This gives the best of both worlds:
+- Context isolation between phases (no cross-contamination)
+- Context preservation during fix iterations (agent remembers its own code)
+- Failed agents do not corrupt state for retry attempts
+
+**Non-implementer agents** (reviewers, architect, UX designer) remain persistent for the full pipeline as team members.
 
 ### Full Text in Prompt
 
@@ -846,16 +856,16 @@ Would you like to:
 
 Exception: For very large diffs (>50KB), write the diff to a temporary file and instruct the agent to read it. Mention the file path AND include a summary of the changes inline.
 
-### Parallel Dispatch
+### Parallel Dispatch (2 Implementer Slots)
 
-When the dependency graph allows it, dispatch multiple implementer agents simultaneously:
+The orchestrator manages 2 implementer slots that can run phases concurrently:
 
-1. Identify phases in the same parallel group with all dependencies satisfied.
-2. Dispatch implementer Tasks for each phase concurrently.
-3. Wait for all to complete before running reviews.
-4. Run reviews sequentially (security first, then acceptance) for each phase.
+1. Identify READY phases (dependencies met, not yet assigned).
+2. Check file overlap between candidate phase and any currently IN_PROGRESS phase.
+3. If no overlap and a slot is free → spawn a fresh implementer in that slot.
+4. Reviews run via persistent reviewer agents (security-reviewer, acceptance-reviewer) who pick up tasks from TaskList.
 
-**Important**: Parallel phases must not touch overlapping files. If two parallel phases modify the same file, they MUST be serialized. Check the "Files to touch" lists for conflicts.
+**Important**: Parallel phases must not touch overlapping files. If two parallel phases modify the same file, they MUST be serialized. The orchestrator checks `files_to_touch` overlap before assignment (§3.1b).
 
 ### Model from Config
 
@@ -892,15 +902,21 @@ PIPELINE_STATE = {
   resolved_config: object,     # Merged configuration
   resolved_checks: object,     # Merged checks
   approved_plan: string,       # Architect's approved plan
+  implementer_slots: {
+    1: { name: "implementer-1", status: "free" | "busy", phase: number | null },
+    2: { name: "implementer-2", status: "free" | "busy", phase: number | null },
+  },
   phases: [
     {
       id: number,
       title: string,
-      status: PENDING | IN_PROGRESS | REVIEW | PASSED | FAILED | SKIPPED | ESCALATED,
+      status: WAITING | READY | IN_PROGRESS | REVIEW | FIXING | COMPLETE | SKIPPED | ESCALATED,
+      implementer_slot: number | null,
+      implement_status: blocked | unblocked | in_progress | done,
+      security_status: blocked | unblocked | in_progress | pass | fail,
+      acceptance_status: blocked | unblocked | in_progress | pass | fail,
       iteration_count: number,
       commits: [string],       # Commit hashes
-      security_verdict: PASS | FAIL | null,
-      acceptance_verdict: PASS | FAIL | null,
       warnings: [string],
       known_issues: [string],
     }

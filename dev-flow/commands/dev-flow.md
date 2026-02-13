@@ -300,6 +300,20 @@ Create the reviews directory:
 mkdir -p .claude/dev-flow/reviews
 ```
 
+### 3.1b File Overlap Detection (Pre-Assignment)
+
+Before assigning phases to implementers in parallel, check for file conflicts:
+
+```
+For each pair of phases (A, B) that could run concurrently:
+  overlap = intersection(A.files_to_touch, B.files_to_touch)
+  if overlap is not empty:
+    SERIALIZE phases A and B (add dependency: B.blockedBy = [A.acceptance])
+    Log: "Phases {A} and {B} serialized due to file overlap: {overlap}"
+```
+
+This prevents git conflicts from two implementers modifying the same files simultaneously. Only phases with no dependency relationship AND no file overlap may run in parallel.
+
 ### 3.2 Create All Tasks with Dependencies
 
 For each phase N in `PLAN`, create **3 tasks** with strict dependency chains:
@@ -361,14 +375,11 @@ TaskCreate(
 → TaskUpdate(taskId=IMPL_N, addBlockedBy=[UX_N])
 ```
 
-### 3.3 Spawn Teammates
+### 3.3 Spawn Reviewers and Architect
 
-Spawn **4-5 persistent agents** as team members:
-- implementer, security-reviewer, acceptance-reviewer (always)
-- architect (consultant - always)
-- ux-designer (only if UI work needed)
+Spawn **3-4 persistent agents** as team members — reviewers, architect (consultant), and optionally UX designer. **Implementers are NOT spawned here** — they are spawned on-demand per phase in §3.3b.
 
-**ALL agents below MUST be spawned in a SINGLE message using parallel Task tool calls, and ALL MUST have `run_in_background: true`.** Do NOT spawn them sequentially -- send one message containing all 4-5 Task tool calls at once.
+**ALL agents below MUST be spawned in a SINGLE message using parallel Task tool calls, and ALL MUST have `run_in_background: true`.** Do NOT spawn them sequentially -- send one message containing all 3-4 Task tool calls at once.
 
 **IMPORTANT:** All teammates MUST be spawned with `mode: "bypassPermissions"` so they can:
 - Access project files without re-asking for directory permissions on each spawn
@@ -376,43 +387,6 @@ Spawn **4-5 persistent agents** as team members:
 - Read and write files in the project directory freely
 
 This is safe because the user explicitly invoked `/dev-flow` in their project directory.
-
-**Implementer agent:**
-```
-Task(
-  name="implementer",
-  team_name="dev-flow-pipeline",
-  subagent_type="general-purpose",
-  model=CONFIG.agents.implementer.model,
-  mode="bypassPermissions",
-  run_in_background=true,
-  prompt="
-    <system>[IMPLEMENTER PROMPT from Appendix C]</system>
-    <project_config>[CONFIG]</project_config>
-    <extra_instructions>[CONFIG.agents.implementer.extra_instructions]</extra_instructions>
-    <full_plan>[Complete PLAN]</full_plan>
-
-    You are a TEAM MEMBER named 'implementer'. Your workflow:
-    1. Call TaskList to find available tasks (status=pending, no blockedBy, no owner)
-    2. Pick up tasks whose subject starts with 'Phase N: Implement'
-    3. Claim the task with TaskUpdate(owner='implementer', status='in_progress')
-    4. Implement following TDD methodology
-    5. Write summary to .claude/dev-flow/reviews/phase-N-implementation.md
-    6. Commit your changes
-    7. Mark task completed with TaskUpdate(status='completed')
-    8. Immediately check TaskList for the next available task
-    9. If no tasks available, wait -- new tasks may become unblocked
-
-    ALSO pick up tasks whose subject contains 'Fix' (feedback loop re-implementations).
-    When picking up fix tasks, read the feedback from the task description and address ALL issues.
-
-    ARCHITECTURE QUESTIONS: If you encounter an architectural decision not covered in
-    the plan or need clarification, use SendMessage to ask the 'architect' teammate.
-    Example: SendMessage(type="message", recipient="architect", content="Should user
-    sessions be stored in Redis or PostgreSQL?", summary="Session storage question")
-  "
-)
-```
 
 **Security reviewer agent:**
 ```
@@ -526,42 +500,195 @@ Task(
 )
 ```
 
+### 3.3b Spawn Implementers On-Demand
+
+Implementers are managed via **2 slots** — each slot holds at most one active implementer agent at a time:
+
+```
+IMPLEMENTER_SLOTS = {
+  1: { name: "implementer-1", status: "free", phase: null },
+  2: { name: "implementer-2", status: "free", phase: null },
+}
+```
+
+**Lifecycle per phase:**
+
+1. **Phase ready + slot free** → spawn a FRESH implementer agent (clean context)
+2. Agent implements the single assigned phase (does NOT search TaskList autonomously)
+3. If review passes → **orkiestrator sends feedback via SendMessage to the SAME agent** (context preserved for fixes)
+4. Agent fixes → re-review
+5. Phase COMPLETE → **shutdown the agent** → slot becomes free
+6. New phase → spawn a completely NEW agent in the freed slot (fresh context)
+
+**Spawn an implementer when a phase is ready:**
+
+```
+Task(
+  name="implementer-{slot}",
+  team_name="dev-flow-pipeline",
+  subagent_type="general-purpose",
+  model=CONFIG.agents.implementer.model,
+  mode="bypassPermissions",
+  run_in_background=true,
+  prompt="
+    <system>[IMPLEMENTER PROMPT from Appendix C]</system>
+    <project_config>[CONFIG]</project_config>
+    <extra_instructions>[CONFIG.agents.implementer.extra_instructions]</extra_instructions>
+
+    You are implementer-{slot}, a TEAM MEMBER. You work on ONLY this specific phase:
+
+    <phase>
+    [Single phase description: title, description, files_to_touch, acceptance_criteria, complexity]
+    </phase>
+
+    Your workflow:
+    1. Claim your assigned task with TaskUpdate(owner='implementer-{slot}', status='in_progress')
+    2. Implement following TDD methodology
+    3. Write summary to .claude/dev-flow/reviews/phase-{N}-implementation.md
+    4. Commit your changes
+    5. Mark task completed with TaskUpdate(status='completed')
+    6. STOP. Do NOT look for more tasks in TaskList. Wait for instructions from the team lead.
+
+    If you receive a message with review feedback:
+    - Pick up the fix task mentioned in the message
+    - Address ALL issues listed in the feedback
+    - Follow TDD: fix tests first, then implementation
+    - Commit and mark the fix task completed
+    - STOP again and wait for further instructions
+
+    ARCHITECTURE QUESTIONS: Use SendMessage to ask the 'architect' teammate.
+  "
+)
+```
+
+**Key rules:**
+- Spawn at most 2 implementers concurrently (one per slot)
+- Before spawning, run file overlap detection (§3.1b) to ensure parallel phases don't conflict
+- Each implementer receives ONLY its assigned phase description, not the full plan
+- The orchestrator is the ONLY entity that assigns work — implementers never self-claim from TaskList
+
 ### 3.4 Monitor Loop (Team Lead)
 
-You are the **team lead**. Monitor the pipeline until all tasks complete:
+You are the **team lead**. Monitor the pipeline until all phases are COMPLETE:
 
 ```
-WHILE there are pending or in_progress tasks:
-  1. Call TaskList to check status
-  2. For each COMPLETED review task:
-     a. Read the review state file (.claude/dev-flow/reviews/phase-N-security.md or phase-N-acceptance.md)
-     b. Check if result is PASS or FAIL
-  3. If a review FAILED:
-     a. Check iteration count for that phase
-     b. If iterations < 3: Create feedback tasks (see 3.5 below)
-     c. If iterations >= 3: ESCALATE to user
-  4. Display status table to user (see below)
-  5. Wait for teammate messages (they arrive automatically)
+WHILE there are phases not yet COMPLETE:
+
+  1. PHASE ASSIGNMENT
+     For each phase with status READY (dependencies met, implement_status == unblocked):
+       a. Check file overlap with any currently IN_PROGRESS phase (§3.1b)
+       b. If overlap: skip (will be assigned when conflicting phase completes)
+       c. Find a free implementer slot (IMPLEMENTER_SLOTS where status == "free")
+       d. If no free slot: skip (will be assigned when a slot frees up)
+       e. Spawn a FRESH implementer agent in the slot (§3.3b)
+       f. Update: slot.status = "busy", slot.phase = N, phase.implementer_slot = slot
+       g. Update: phase.implement_status = "in_progress", phase.status = "IN_PROGRESS"
+
+  2. REVIEW MONITORING
+     Call TaskList to check status.
+     For each COMPLETED review task:
+       a. Read the review file (.claude/dev-flow/reviews/phase-N-security.md or phase-N-acceptance.md)
+       b. Update phase.security_status or phase.acceptance_status accordingly
+
+  3. FEEDBACK HANDLING
+     For each phase where security_status == "fail" OR acceptance_status == "fail":
+       a. Check iteration count
+       b. If iterations < 3: Create fix task, send feedback to SAME implementer (§3.5)
+       c. If iterations >= 3: ESCALATE to user
+       d. Update phase.status = "FIXING"
+
+  4. PHASE COMPLETION
+     For each phase where security_status == "pass" AND acceptance_status == "pass":
+       a. Update phase.status = "COMPLETE"
+       b. Shutdown the implementer: SendMessage(type="shutdown_request", recipient="implementer-{slot}", ...)
+       c. Free the slot: slot.status = "free", slot.phase = null
+       d. Check if newly unblocked phases exist → update their status to READY
+
+  5. STATUS DISPLAY
+     Display Pipeline Status Table (see format above)
+
+  6. WATCHDOG CHECK (§3.4b)
+
+  7. Wait for teammate messages (they arrive automatically)
 ```
 
-**Display this status table** after each significant event:
+**Display this status table** after each significant event (phase assignment, task completion, review result, feedback iteration):
 
 ```
 ## Pipeline Status
-| Phase | Title           | Implement | Security | Acceptance | Iter | Result |
-|-------|-----------------|-----------|----------|------------|------|--------|
-| 1     | [title]         | DONE      | PASS     | PASS       | 1    | OK     |
-| 2     | [title]         | DONE      | FAIL     | ...        | 1    | FIXING |
-| 3     | [title]         | PENDING   | BLOCKED  | BLOCKED    | 0    | ...    |
+| Phase | Title                     | Implement   | Security  | Acceptance | Iter | Status      |
+|-------|---------------------------|-------------|-----------|------------|------|-------------|
+| 1.1   | BookService Tests         | DONE        | PASS      | PASS       | 1    | COMPLETE    |
+| 1.2   | BooksProvider Tests       | DONE        | PASS      | PASS       | 2    | COMPLETE    |
+| 1.3   | Consolidate BookService   | in_progress | blocked   | blocked    | 0    | IN_PROGRESS |
+| 1.4   | Consolidate BooksProvider | unblocked   | blocked   | blocked    | 0    | READY       |
+| 1.5   | BookDetailsScreen         | blocked     | blocked   | blocked    | 0    | WAITING     |
+
+3/5 phases complete. implementer-1 working on Phase 1.3 (consolidate BookService -- complexity: M).
 ```
+
+**Cell states:**
+- **Implement:** `blocked` → `unblocked` → `in_progress` → `DONE`
+- **Security:** `blocked` → `unblocked` → `in_progress` → `PASS`/`FAIL`
+- **Acceptance:** `blocked` → `unblocked` → `in_progress` → `PASS`/`FAIL`
+- **Status:** `WAITING` | `READY` | `IN_PROGRESS` | `REVIEW` | `FIXING` | `COMPLETE`
+
+**Summary line:** `{N}/{total} phases complete. {current action}.`
+
+### 3.4b Watchdog Health Monitor
+
+The orchestrator checks agent health on every monitor loop iteration. This is event-driven (not timer-based) — checks happen whenever the orchestrator processes an event (idle notification, message, TaskList check).
+
+**Tracking mechanism:** Ephemeral timestamp files in `.claude/dev-flow/`:
+
+```bash
+# Record when an idle warning was sent
+echo $(date +%s) > .claude/dev-flow/.watchdog-implementer-1
+
+# Check elapsed time
+cat .claude/dev-flow/.watchdog-implementer-1
+date +%s  # compare with current timestamp
+```
+
+**Thresholds:**
+
+| Threshold | Time | Action |
+|-----------|------|--------|
+| Idle warning | 2 min since idle notification | SendMessage reminder to the agent |
+| Unresponsive | 5 min since the idle warning was sent | Kill agent (shutdown_request), spawn replacement |
+
+**Important:** Thresholds apply ONLY to agents with assigned work. An idle architect with no pending questions is normal and should NOT trigger the watchdog.
+
+**On every monitor loop iteration:**
+
+1. **When idle notification arrives from an agent with assigned work:**
+   - Check if `.watchdog-{agent}` file exists
+   - If no file: create it with current timestamp, send a reminder:
+     ```
+     SendMessage(type="message", recipient="{agent}",
+       content="Watchdog: You appear idle but have assigned work. Please check TaskList or continue your current task.",
+       summary="Idle reminder")
+     ```
+   - If file exists: read timestamp, compare with `date +%s`
+   - If >5 min elapsed since the watchdog file was created: **KILL and RESPAWN**
+
+2. **When agent shows activity** (sends a message, completes a task):
+   - Delete `.watchdog-{agent}` file (reset the timer)
+
+3. **Respawn logic:**
+   - **Implementer:** Spawn fresh agent in the same slot. Include the phase description + `git diff` showing partial work so the new agent can continue.
+   - **Reviewer:** Spawn fresh with the same name. It picks up tasks from TaskList.
+   - **Architect:** Spawn fresh with the consultant prompt.
+
+4. **Cleanup:** Delete all `.watchdog-*` files at pipeline completion (§3.6).
 
 ### 3.5 Feedback Loop (when a review FAILs)
 
 When a security or acceptance review returns FAIL:
 
-1. **Read the failure details** from the state file
+1. **Read the failure details** from the review file
 2. **Track iteration count** for this phase (start at 1, max 3)
-3. **Create new tasks:**
+3. **Create fix task and re-review tasks:**
    ```
    TaskCreate(
      subject="Phase N: Fix [Security/Acceptance] Issues (iteration M)",
@@ -588,8 +715,24 @@ When a security or acceptance review returns FAIL:
    → Store as RE_ACC_ID
    → TaskUpdate(taskId=RE_ACC_ID, addBlockedBy=[RE_SEC_ID])
    ```
-4. **Update cross-phase dependency:** Phase N+1's implementation should now be blocked by the NEW acceptance review task.
-5. **Continue monitoring** -- teammates will pick up the new tasks automatically.
+
+4. **Send feedback to the SAME implementer** (context preserved — the agent still has the context of what it built):
+   ```
+   SendMessage(
+     type="message",
+     recipient="implementer-{slot}",
+     content="Phase N review failed. Fix task ID: {FIX_TASK_ID}.
+       Feedback: {full review findings and recommendations}.
+       Pick up the fix task, address ALL issues, commit, and mark it completed.",
+     summary="Fix Phase N review issues"
+   )
+   ```
+
+5. **Update cross-phase dependency:** Phase N+1's implementation should now be blocked by the NEW acceptance review task.
+6. **Update phase status:** `phase.status = "FIXING"`
+7. **Continue monitoring** -- the same implementer picks up the fix task with full context.
+
+**Context overflow safeguard:** After 2 fix iterations with the same agent, if reviews still fail, consider shutting down the agent and spawning a fresh one with a summary of all previous attempts and the current git diff.
 
 **After 3 iterations without resolution:** ESCALATE to user.
 - Present all remaining failures
@@ -600,26 +743,34 @@ When a security or acceptance review returns FAIL:
 
 ### 3.6 Pipeline Complete
 
-When ALL tasks in TaskList are completed:
+When ALL phases are COMPLETE:
 
 1. **Verify all review files exist:**
    ```bash
    ls .claude/dev-flow/reviews/phase-*-security.md .claude/dev-flow/reviews/phase-*-acceptance.md
    ```
-2. **Shut down teammates:**
+2. **Shut down all active teammates** (dynamic — only agents that are still alive):
    ```
-   SendMessage(type="shutdown_request", recipient="implementer", content="All tasks complete")
+   # Implementers: should already be shut down per-phase. If any remain:
+   For each slot in IMPLEMENTER_SLOTS where status == "busy":
+     SendMessage(type="shutdown_request", recipient="implementer-{slot}", content="Pipeline complete")
+
+   # Persistent agents:
    SendMessage(type="shutdown_request", recipient="security-reviewer", content="All tasks complete")
    SendMessage(type="shutdown_request", recipient="acceptance-reviewer", content="All tasks complete")
    SendMessage(type="shutdown_request", recipient="architect", content="All tasks complete")
    SendMessage(type="shutdown_request", recipient="ux-designer", content="All tasks complete")  # if spawned
    ```
-3. **Clean up the team:**
+3. **Clean up watchdog files:**
+   ```bash
+   rm -f .claude/dev-flow/.watchdog-*
+   ```
+4. **Clean up the team:**
    ```
    TeamDelete()
    ```
-4. **Collect phase outcomes** from all review state files.
-5. **Proceed to Phase 4 (PM Report).**
+5. **Collect phase outcomes** from all review state files.
+6. **Proceed to Phase 4 (PM Report).**
 
 ---
 
@@ -921,9 +1072,14 @@ Every component must account for: default, hover, focus, active, disabled, loadi
 
 You are a **developer** following **strict Test-Driven Development (TDD)**. You write tests first, implement the minimum code to make them pass, then refactor. You never skip steps, never write implementation before tests, and never commit code that does not pass all checks.
 
+**You are implementer-{slot}.** You work on ONLY the specific phase assigned to you. After completing your work, STOP. Do NOT look for more tasks in TaskList. Wait for instructions from the team lead.
+
+If you receive a message with review feedback, pick up the fix task referenced in the message and address ALL issues listed.
+
 ### Core Philosophy
 
 - **TDD is non-negotiable:** RED -> GREEN -> REFACTOR. Every single piece of functionality follows this cycle.
+- **Single phase focus:** You implement ONE phase. You do NOT search TaskList for additional work.
 - **Design system compliance:** If a `design-system/` directory exists, you MUST use its components for all UI work.
 - **Persona awareness:** If personas exist, all UX copy must match the target persona's tone.
 - **Small, focused changes:** Prefer many small commits over one large commit.
@@ -1112,10 +1268,9 @@ You are a **lightweight Project Manager** overseeing the dev-flow pipeline. You 
 
 ### Responsibilities
 
-1. **Task Progress Monitoring:** Check TaskList, identify stalled tasks, flag issues
-2. **Feedback Loop Management:** After 3 iterations without resolution, suggest simplification, skip with justification, or escalation
-3. **Dynamic Check Suggestions:** Suggest new review checks based on observed patterns
-4. **Final Pipeline Report:** Run tests, run lint, verify security and acceptance status, list all commits and files, summarize what was built, recommend follow-ups
+1. **Feedback Loop Pattern Analysis:** Observe recurring patterns across phases for the final report (which issues recur, which types of feedback cause most iterations). The orchestrator handles active stall detection via the Watchdog.
+2. **Dynamic Check Suggestions:** Suggest new review checks based on observed patterns
+3. **Final Pipeline Report:** Run tests, run lint, verify security and acceptance status, list all commits and files, summarize what was built, recommend follow-ups
 
 ### Output Format: Final Report
 
