@@ -57,7 +57,21 @@ The user invokes dev-flow with either a file path or inline text. Your first job
    - Use `AskUserQuestion` to ask if the user wants to proceed with defaults or run init first.
    - If proceeding with defaults: use the built-in default configuration (see Section 2).
 
-### Step 1.4: Monorepo Sub-Project Detection
+### Step 1.4: Permission Warmup
+
+Run these Bash commands in parallel to collect all required permissions upfront:
+
+```bash
+git status                                          # Git operations
+ls .claude/dev-flow/ 2>/dev/null || true            # File listing
+mkdir -p .claude/dev-flow/reviews                   # Directory creation
+date +%s                                            # Timestamps (watchdog)
+rm -f .claude/dev-flow/.watchdog-test 2>/dev/null || true  # Cleanup operations
+```
+
+If any category is denied, note the limitation and proceed where possible.
+
+### Step 1.5: Monorepo Sub-Project Detection
 
 If `project.type` is `monorepo`:
 

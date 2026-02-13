@@ -89,6 +89,32 @@ Store the resolved text as `TASK_INPUT` for use throughout the pipeline.
 
 Store the resolved configuration as `CONFIG` for use throughout the pipeline.
 
+### 0.4 Permission Warmup (MANDATORY)
+
+The pipeline requires multiple Bash commands throughout execution. To avoid repeated permission prompts mid-pipeline, run ALL of the following commands upfront in a **single parallel batch**. The user approves each category once, and subsequent calls are auto-approved.
+
+```bash
+# Git operations (used throughout Phase 3: commits, diffs, logs)
+git status
+
+# File operations (review files, watchdog timestamps)
+ls .claude/dev-flow/ 2>/dev/null || true
+
+# Directory creation (review output directory)
+mkdir -p .claude/dev-flow/reviews
+
+# Timestamp operations (watchdog health monitor)
+date +%s
+
+# Cleanup operations (watchdog files, pipeline artifacts)
+rm -f .claude/dev-flow/.watchdog-test 2>/dev/null || true
+```
+
+Run these **in parallel** (multiple Bash tool calls in a single message). If the user denies any category, note the limitation:
+- **Git denied:** Cannot commit, diff, or log. Pipeline will run but without automated commits.
+- **File ops denied:** Cannot write review files or watchdog timestamps. Reviews will be inline-only.
+- **All denied:** Inform user the pipeline requires Bash access and cannot proceed.
+
 ---
 
 ## Phase 1: Planning (Architect + Security Review) -- Iterative Conversation
