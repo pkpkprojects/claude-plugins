@@ -30,8 +30,7 @@ INPUT (PRD/task) -> PLANNING -> [DESIGN SYSTEM] -> IMPLEMENTATION LOOP -> PM REP
 ## Installation
 
 ```bash
-cd dev-flow/
-claude /install-plugin .
+claude --plugin-dir dev-flow/
 ```
 
 ## Usage
