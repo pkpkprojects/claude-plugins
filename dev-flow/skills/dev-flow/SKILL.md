@@ -123,6 +123,9 @@ agents:
   acceptance-reviewer:
     model: "sonnet"
     extra_instructions: ""
+  legal-reviewer:
+    model: "sonnet"
+    extra_instructions: ""
   pm:
     model: "haiku"
     extra_instructions: ""
@@ -137,7 +140,23 @@ agents:
    - `optional` checks (run only if `run: true`)
 3. If the file does not exist, construct a default checks object with the standard checks from the default template (tests_pass, tests_quality, no_hardcoded_secrets, lint_passes) and security checks (owasp_top10, input_validation, sensitive_data).
 
-### Step 2.3: Monorepo Configuration Inheritance
+### Step 2.3: Load Legal Compliance Configuration
+
+1. Check if `RESOLVED_CONFIG` contains a `legal` section.
+2. If present, extract:
+   - `legal.jurisdictions` (list of jurisdiction codes: PL, EU, US, etc.)
+   - `legal.sectors` (list of sector codes: medical, financial, etc.)
+   - `legal.extras` (list of extras: ecommerce, ai, platform, etc.)
+   - `legal.overrides` (list of override objects)
+3. If `legal` section is absent, set `LEGAL_CONFIG = null`. The legal reviewer will be skipped.
+4. Store as `LEGAL_CONFIG`.
+5. If `LEGAL_CONFIG` is not null, load matching checklists:
+   - For each jurisdiction in `legal.jurisdictions`: load all `.yaml` files from `dev-flow/compliance/checklists/{jurisdiction}/`
+   - For each sector in `legal.sectors`: load all `.yaml` files from `dev-flow/compliance/checklists/sectors/{sector}.yaml`
+   - Filter: only include checklists where `applies_when` matches the project's jurisdictions, sectors, or extras.
+   - Store as `LEGAL_CHECKLISTS`.
+
+### Step 2.4: Monorepo Configuration Inheritance
 
 When `project.type` is `monorepo` and `TARGET_SUBPROJECTS` has been identified:
 
