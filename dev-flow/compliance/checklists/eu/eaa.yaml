@@ -1,0 +1,71 @@
+name: European Accessibility Act (EAA)
+version: "2024.1"
+applies_when:
+  jurisdictions: [EU]
+severity_default: HIGH
+
+checks:
+  - id: EAA-01
+    area: "WCAG 2.1 AA compliance"
+    question: "Czy interfejs użytkownika spełnia wymagania WCAG 2.1 na poziomie AA?"
+    severity: HIGH
+    hints:
+      - "Szukaj naruszenia zasad percepcji (brak alt text, niska kontrastowość)"
+      - "Szukaj naruszenia zasad funkcjonalności (brak obsługi klawiatury)"
+      - "Szukaj naruszenia zasad zrozumiałości (niejasne formularze)"
+      - "Szukaj naruszenia zasad solidności (niepoprawny HTML)"
+    remediation: "Przeprowadź audyt WCAG 2.1 AA. Kluczowe obszary: teksty alternatywne dla obrazów, kontrast kolorów, obsługa klawiatury, oznaczenia formularzy, poprawna struktura nagłówków, semantyczny HTML."
+
+  - id: EAA-02
+    area: "Screen reader compatibility"
+    question: "Czy interfejs jest kompatybilny z czytnikami ekranu?"
+    severity: HIGH
+    hints:
+      - "Szukaj elementów bez atrybutów aria-label lub aria-labelledby"
+      - "Szukaj dynamicznych treści bez aria-live regions"
+      - "Sprawdź czy role ARIA są poprawnie użyte"
+      - "Szukaj custom widgetów bez odpowiednich atrybutów ARIA"
+    remediation: "Dodaj atrybuty ARIA do interaktywnych elementów. Użyj aria-live dla dynamicznie aktualizowanych treści. Upewnij się, że custom widgety mają odpowiednie role i stany ARIA. Testuj z NVDA/VoiceOver."
+
+  - id: EAA-03
+    area: "Keyboard navigation"
+    question: "Czy wszystkie funkcje są dostępne za pomocą klawiatury?"
+    severity: HIGH
+    hints:
+      - "Szukaj onClick bez odpowiednika klawiszowego"
+      - "Szukaj custom dropdownów i modali bez obsługi Tab/Escape"
+      - "Sprawdź kolejność fokusa (tabindex)"
+      - "Szukaj pułapek fokusa (focus traps) w modalach"
+    remediation: "Zapewnij pełną nawigację klawiaturą: Tab do poruszania się, Enter/Space do aktywacji, Escape do zamykania modali/dropdownów. Dodaj widoczny wskaźnik fokusa (:focus-visible). Zarządzaj fokusem przy otwieraniu/zamykaniu modali."
+
+  - id: EAA-04
+    area: "Color contrast ratios"
+    question: "Czy kontrast kolorów spełnia wymogi WCAG 2.1 AA?"
+    severity: MEDIUM
+    hints:
+      - "Szukaj tekstu o niskim kontraście (szary na białym, jasne kolory)"
+      - "Sprawdź kontrast w dark mode jeśli dostępny"
+      - "Szukaj informacji przekazywanych tylko kolorem (np. status: czerwony/zielony)"
+    remediation: "Zapewnij kontrast minimum 4.5:1 dla tekstu normalnego i 3:1 dla tekstu dużego (18px+ lub 14px+ bold). Nie przekazuj informacji wyłącznie kolorem — dodaj ikony, tekst lub wzory."
+
+  - id: EAA-05
+    area: "Alternative text for images"
+    question: "Czy wszystkie obrazy informacyjne mają tekst alternatywny?"
+    severity: MEDIUM
+    hints:
+      - "Szukaj tagów <img> bez atrybutu alt"
+      - "Szukaj obrazów dekoracyjnych z niepustym alt (powinny mieć alt='')"
+      - "Szukaj ikon bez etykiet tekstowych"
+      - "Szukaj SVG bez title lub aria-label"
+    remediation: "Dodaj opisowy atrybut alt do wszystkich obrazów informacyjnych. Obrazy dekoracyjne powinny mieć alt=''. Ikony funkcjonalne potrzebują aria-label. SVG powinny mieć element <title>."
+
+  - id: EAA-06
+    area: "Form labels and error messages"
+    question: "Czy formularze mają poprawne etykiety i komunikaty błędów?"
+    severity: HIGH
+    hints:
+      - "Szukaj inputów bez powiązanych <label> lub aria-label"
+      - "Szukaj placeholderów używanych jako jedyna etykieta"
+      - "Sprawdź czy komunikaty walidacji są powiązane z polami (aria-describedby)"
+      - "Szukaj formularzy bez podsumowania błędów"
+    remediation: "Każde pole formularza musi mieć widoczną etykietę (<label> z for=). Komunikaty błędów muszą być powiązane z polami (aria-describedby). Dodaj podsumowanie błędów na górze formularza. Nie polegaj wyłącznie na placeholderach."

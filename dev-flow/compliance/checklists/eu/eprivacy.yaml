@@ -1,0 +1,58 @@
+name: ePrivacy Directive
+version: "2024.1"
+applies_when:
+  jurisdictions: [EU]
+severity_default: HIGH
+
+checks:
+  - id: EPRIV-01
+    area: "Cookie consent"
+    question: "Czy aplikacja uzyskuje świadomą zgodę użytkownika przed ustawieniem plików cookie (poza niezbędnymi)?"
+    severity: CRITICAL
+    hints:
+      - "Szukaj cookie bannerów lub consent managerów"
+      - "Szukaj ustawiania cookies przed uzyskaniem zgody"
+      - "Sprawdź czy cookies analityczne/marketingowe są blokowane do momentu zgody"
+      - "Szukaj integracji z CMP (Consent Management Platform)"
+    remediation: "Zaimplementuj cookie banner z granularnym wyborem kategorii (niezbędne, analityczne, marketingowe). Cookies nieistotne muszą być blokowane do momentu uzyskania zgody. Zgoda musi być tak samo łatwa do wycofania jak do udzielenia."
+
+  - id: EPRIV-02
+    area: "Tracking consent"
+    question: "Czy śledzenie aktywności użytkownika wymaga uprzedniej zgody?"
+    severity: HIGH
+    hints:
+      - "Szukaj skryptów tracking (Google Analytics, Facebook Pixel, Hotjar)"
+      - "Szukaj fingerprinting przeglądarki"
+      - "Sprawdź czy tracking jest ładowany przed zgodą"
+    remediation: "Upewnij się, że skrypty śledzące (analytics, heatmaps, reklamy) są ładowane dopiero po uzyskaniu zgody użytkownika. Użyj mechanizmu consent management do warunkowego ładowania skryptów."
+
+  - id: EPRIV-03
+    area: "Analytics opt-out"
+    question: "Czy użytkownik ma możliwość rezygnacji z analityki?"
+    severity: MEDIUM
+    hints:
+      - "Szukaj opcji opt-out w ustawieniach prywatności"
+      - "Sprawdź czy cookie banner pozwala na odrzucenie cookies analitycznych"
+      - "Szukaj privacy-friendly alternatyw (Plausible, Matomo z opt-out)"
+    remediation: "Zapewnij możliwość rezygnacji z analityki: przycisk opt-out w ustawieniach prywatności lub możliwość wycofania zgody na cookies analityczne w cookie bannerze."
+
+  - id: EPRIV-04
+    area: "Marketing emails consent"
+    question: "Czy wysyłanie emaili marketingowych wymaga wyraźnej zgody?"
+    severity: HIGH
+    hints:
+      - "Szukaj formularzy newslettera"
+      - "Sprawdź czy formularz rejestracji nie ma pre-zaznaczonego checkboxa na newsletter"
+      - "Szukaj mechanizmu double opt-in"
+      - "Szukaj linku unsubscribe w szablonach emaili"
+    remediation: "Wymagaj wyraźnej zgody na komunikację marketingową (osobny, niezaznaczony checkbox). Zaimplementuj double opt-in dla newslettera. Każdy email marketingowy musi zawierać link do rezygnacji (unsubscribe)."
+
+  - id: EPRIV-05
+    area: "Third-party tracking disclosure"
+    question: "Czy użytkownik jest informowany o śledzeniu przez podmioty trzecie?"
+    severity: HIGH
+    hints:
+      - "Szukaj skryptów third-party (ads, social media, analytics)"
+      - "Sprawdź czy polityka prywatności wymienia podmioty trzecie"
+      - "Szukaj social media widgets (Like button, Share)"
+    remediation: "W polityce prywatności i cookie bannerze wymień wszystkie podmioty trzecie, które mogą śledzić użytkowników. Dla social media widgets rozważ implementację two-click solution (ładowanie widgetu dopiero po interakcji)."
