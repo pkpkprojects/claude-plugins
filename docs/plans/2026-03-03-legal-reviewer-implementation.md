@@ -634,7 +634,52 @@ git commit -m "feat(dev-flow): add legal config to init command"
 
 ---
 
-### Task 13: Final verification
+### Task 13: Update orchestrator to use team-based execution instead of subagents
+
+**Files:**
+- Modify: `dev-flow/skills/dev-flow/SKILL.md` — Section 5 (Implementation Loop)
+
+**Step 1: Read current Section 5 team setup**
+
+Read `dev-flow/skills/dev-flow/SKILL.md` Section 5, focusing on how implementer slots are spawned and how review agents are dispatched.
+
+**Step 2: Replace subagent dispatch with team-based execution**
+
+The current pipeline dispatches each agent (implementer, security-reviewer, acceptance-reviewer, legal-reviewer) as isolated `Task` subagents. Change this to use `TeamCreate` + `Agent` with `team_name` so all agents operate within a shared team context.
+
+Key changes in Section 5:
+
+1. **At the start of the Implementation Loop**, create a team:
+   ```
+   TeamCreate(team_name="{project-name}-impl", description="Implementation team for {phase}")
+   ```
+
+2. **Replace `Task` subagent dispatches** with `Agent` tool calls using `team_name` parameter for:
+   - Implementer slots (Step 5b)
+   - Security reviewer (Step 5c)
+   - Legal reviewer (Step 5c.5)
+   - Acceptance reviewer (Step 5d)
+
+3. **Use `SendMessage`** for feedback loops (Step 5e) instead of spawning new Task subagents — send review feedback directly to the implementer teammate.
+
+4. **Use `TaskCreate`/`TaskUpdate`/`TaskList`** within the team for task coordination instead of orchestrator manually sequencing agents.
+
+5. **At the end of all phases**, use `SendMessage` with `type: "shutdown_request"` to gracefully shut down teammates, then `TeamDelete`.
+
+**Step 3: Update the "Execution Handoff" pattern**
+
+Find any references to "Subagent-Driven" execution mode in the orchestrator and remove it. The only execution model is team-based parallel sessions.
+
+**Step 4: Commit**
+
+```bash
+git add dev-flow/skills/dev-flow/SKILL.md
+git commit -m "feat(dev-flow): switch from subagent dispatch to team-based execution"
+```
+
+---
+
+### Task 14: Final verification
 
 **Step 1: Verify all new files exist**
 
@@ -673,4 +718,4 @@ Expected: References to legal reviewer in Sections 2, 3, 5, 6, and Agent Dispatc
 git log --oneline -15
 ```
 
-Expected: All commits from this plan visible.
+Expected: All commits from this plan visible, including team-based execution refactor.
