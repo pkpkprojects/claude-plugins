@@ -151,9 +151,10 @@ agents:
 3. If `legal` section is absent, set `LEGAL_CONFIG = null`. The legal reviewer will be skipped.
 4. Store as `LEGAL_CONFIG`.
 5. If `LEGAL_CONFIG` is not null, load matching checklists:
-   - For each jurisdiction in `legal.jurisdictions`: load all `.yaml` files from `dev-flow/compliance/checklists/{jurisdiction}/`
+   - Convert jurisdiction codes to lowercase for directory paths (e.g., EU → `eu/`, PL → `pl/`).
+   - For each jurisdiction in `legal.jurisdictions`: load all `.yaml` files from `dev-flow/compliance/checklists/{jurisdiction_lowercase}/`
    - For each sector in `legal.sectors`: load all `.yaml` files from `dev-flow/compliance/checklists/sectors/{sector}.yaml`
-   - Filter: only include checklists where `applies_when` matches the project's jurisdictions, sectors, or extras.
+   - Filter: A checklist matches when ALL conditions in its `applies_when` are satisfied: the project's jurisdictions must include at least one value from the checklist's `jurisdictions`, AND (if the checklist specifies `sectors`) the project's `sectors` must include at least one value from the checklist's `sectors`, AND (if the checklist specifies `extras`) the project's `extras` must include at least one value from the checklist's `extras`.
    - Store as `LEGAL_CHECKLISTS`.
 
 ### Step 2.4: Monorepo Configuration Inheritance
@@ -266,7 +267,15 @@ Parse this plan and extract:
 
 **Entry condition:** `LEGAL_CONFIG` is not null AND the task is not tagged as `hotfix` or `refactor` AND `legal_review` is not explicitly set to `false` in the task/PRD.
 
-1. Dispatch a **fresh agent** for the legal-reviewer:
+1. Dispatch a **fresh agent** for the legal-reviewer.
+
+   > **Note:** Phase 1 legal review runs as a standalone agent outside the team context (the implementation team does not exist yet). Do NOT pass `team_name`.
+
+   ```
+   Tool: Agent
+   subagent_type: general-purpose
+   name: "legal-reviewer"
+   ```
 
    **Prompt must include ALL of the following inline:**
    - **Role assignment**: "You are the legal-reviewer agent. Review the following implementation plan for legal compliance requirements. Use Mode 1: Plan Review."
