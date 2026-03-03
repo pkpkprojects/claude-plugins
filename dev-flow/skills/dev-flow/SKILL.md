@@ -538,8 +538,86 @@ subagent_type: general-purpose
 Parse the security reviewer's output:
 - Extract `Verdict` (PASS or FAIL)
 - Extract all findings with their severities
-- If `PASS`: proceed to Step 5d.
+- If `PASS`: proceed to Step 5c.5 (Legal Review) or Step 5d if legal review is not configured.
 - If `FAIL`: proceed to Step 5e (Feedback Loop).
+
+### Step 5c.5: Legal Compliance Review (Conditional)
+
+**Entry condition:** `LEGAL_CONFIG` is not null AND the task is not tagged as `hotfix` or `refactor` AND `legal_review` is not `false`.
+
+**Step 5c.5.1: Dispatch legal-reviewer**
+
+Create a **new Task** (fresh subagent):
+
+```
+Tool: Task
+subagent_type: general-purpose
+```
+
+**Prompt must include ALL of the following inline:**
+
+1. **Role assignment**: "You are the legal-reviewer agent. Review the following code changes for legal compliance. Use Mode 2: Code/Feature Review."
+
+2. **The git diff**: Complete diff output (same as gathered for security review).
+
+3. **Phase description**: What this phase implements.
+
+4. **Legal configuration**: Full `LEGAL_CONFIG` serialized as YAML.
+
+5. **Matching checklists**: Full content of all `LEGAL_CHECKLISTS`.
+
+6. **Project configuration**: `project.type`, `project.stack`, `project.name`.
+
+7. **Extra instructions**: The value of `agents.legal-reviewer.extra_instructions` from config.
+
+8. **Output format instruction**:
+   ```
+   Produce your review in this exact format:
+
+   ## Legal Compliance Review: [PASS/FAIL]
+
+   ### Project Context
+   - **Jurisdictions:** [list]
+   - **Sectors:** [list]
+
+   ### Findings
+
+   | ID | Area | Status | Severity | Confidence |
+   |----|------|--------|----------|------------|
+   | GDPR-01 | ... | NON-COMPLIANT | CRITICAL | 95% |
+
+   For each NON-COMPLIANT or NEEDS REVIEW finding:
+   - **ID**: [check ID or CUSTOM-N]
+   - **Area**: [legal area]
+   - **Status**: COMPLIANT / NON-COMPLIANT / NEEDS REVIEW
+   - **Severity**: CRITICAL / HIGH / MEDIUM / LOW / INFO
+   - **Confidence**: [percentage]
+   - **File**: [file path]
+   - **Description**: [what the issue is]
+   - **Remediation**: [how to fix it]
+
+   ### Acknowledged Decisions
+   [List overrides that were applied, with their reasons]
+
+   ### Summary
+   - Compliant: [N]
+   - Non-Compliant: [N]
+   - Needs Review: [N]
+   - Acknowledged: [N]
+   - **Verdict: PASS** (no CRITICAL findings) / **FAIL** (has CRITICAL findings)
+
+   ### Recommendations
+   [Prioritized list]
+   ```
+
+**Step 5c.5.2: Evaluate legal review result**
+
+Parse the legal reviewer's output:
+- Extract `Verdict` (PASS or FAIL)
+- Extract all findings
+- Store full report text as `LEGAL_REVIEW_REPORT` for PM and orchestrator to save
+- If `PASS`: proceed to Step 5d (Acceptance Review).
+- If `FAIL` (CRITICAL findings): proceed to Step 5e (Feedback Loop).
 
 ### Step 5d: Acceptance Review
 
@@ -608,7 +686,7 @@ Parse the acceptance reviewer's output:
 
 ### Step 5e: Feedback Loop
 
-When either the security review or acceptance review returns a `FAIL` verdict, enter the feedback loop.
+When the security review, legal review, or acceptance review returns a `FAIL` verdict, enter the feedback loop.
 
 **Constants:**
 - `MAX_ITERATIONS = 3` per phase
@@ -621,10 +699,11 @@ Combine all failure feedback into a single feedback document:
 ```markdown
 ## Reviewer Feedback (Iteration {iteration_count + 1})
 
-### Source: {security-reviewer | acceptance-reviewer | both}
+### Source: {security-reviewer | legal-reviewer | acceptance-reviewer | combination}
 
 ### Findings Requiring Action:
 {List of all CRITICAL and HIGH findings from security review}
+{List of all CRITICAL findings from legal review}
 {List of all unmet acceptance criteria}
 {List of all failing checks}
 
@@ -663,8 +742,9 @@ The implementer then:
 After the implementer completes fixes:
 
 - If the security review failed: re-run Step 5c (fresh security-reviewer subagent).
+- If the legal review failed: re-run Step 5c.5 (fresh legal-reviewer subagent).
 - If the acceptance review failed: re-run Step 5d (fresh acceptance-reviewer subagent).
-- If both failed: re-run both. Security review first, then acceptance review (only if security passes).
+- If multiple failed: re-run in order: security review → legal review → acceptance review (each only if the previous passes).
 
 **Step 5e.4: Evaluate and Loop**
 
