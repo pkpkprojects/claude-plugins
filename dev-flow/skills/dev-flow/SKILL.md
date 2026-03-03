@@ -819,6 +819,13 @@ Build a summary document covering all phases:
 
 ### Known Issues:
 {Any issues accepted by user during escalation}
+
+### Legal Compliance Status:
+- Legal review enabled: Yes/No
+- Jurisdictions: {list}
+- Overall verdict: PASS/FAIL
+- Critical findings: {N}
+- Acknowledged overrides: {N}
 ```
 
 ### Step 6.2: Dispatch PM Agent
@@ -905,12 +912,19 @@ Parse the PM's report:
 
 ## 7. Completion
 
+### Step 7.0: Save Legal Compliance Report
+
+If `LEGAL_REVIEW_REPORT` is not empty:
+1. Use `Write` to save the full report to `.claude/dev-flow/review/legal-review-{date}.md` in the project.
+2. Include this file path in the PM report as a reference.
+
 ### Step 7.1: Present Final Report
 
 Display the PM's final report to the user. Include:
 - The full report text
 - A list of all commits made during the pipeline
 - Any warnings or known issues
+- Legal compliance report path (if legal review was enabled)
 
 ### Step 7.2: Determine Next Steps
 
@@ -1012,6 +1026,7 @@ Each agent dispatch should respect the model setting from config.yaml:
 | ux-designer | opus | Creative design work, system thinking |
 | implementer | sonnet | Strong coding, good balance of speed/quality |
 | security-reviewer | sonnet | Detailed analysis, pattern matching |
+| legal-reviewer | sonnet | Legal compliance analysis, checklist evaluation |
 | acceptance-reviewer | sonnet | Thorough checking, rule application |
 | pm | haiku | Summary, formatting, simple verification |
 
@@ -1049,6 +1064,7 @@ PIPELINE_STATE = {
       implementer_slot: number | null,
       implement_status: blocked | unblocked | in_progress | done,
       security_status: blocked | unblocked | in_progress | pass | fail,
+      legal_status: blocked | unblocked | in_progress | pass | fail | skipped,
       acceptance_status: blocked | unblocked | in_progress | pass | fail,
       iteration_count: number,
       commits: [string],       # Commit hashes
@@ -1057,6 +1073,9 @@ PIPELINE_STATE = {
     }
   ],
   design_system_approved: boolean,
+  legal_config: object | null,
+  legal_checklists: [object] | null,
+  legal_review_report: string | null,
   pm_report: string,
   overall_status: PENDING | IN_PROGRESS | COMPLETED | FAILED,
 }
@@ -1177,11 +1196,22 @@ Quick reference for dispatching each agent type. Every dispatch uses the `Task` 
 | Output | Security review with PASS/FAIL verdict |
 | User interaction | No |
 
+### Legal Reviewer
+
+| Field | Value |
+|-------|-------|
+| When | Phase 3 Step 3.5b (plan review) and Phase 5 Step 5c.5 (code review) |
+| Input | Plan or git diff + LEGAL_CONFIG + LEGAL_CHECKLISTS + RESOLVED_CONFIG |
+| Skills | None |
+| Output | Legal compliance review with PASS/FAIL verdict |
+| User interaction | No |
+| Condition | Only if `LEGAL_CONFIG` is not null and task is not hotfix/refactor |
+
 ### Acceptance Reviewer
 
 | Field | Value |
 |-------|-------|
-| When | Phase 5d (after security review passes) |
+| When | Phase 5d (after security and legal review pass) |
 | Input | Git diff + acceptance criteria + full RESOLVED_CHECKS + RESOLVED_CONFIG |
 | Skills | None |
 | Output | Acceptance review with PASS/FAIL verdict |
@@ -1234,6 +1264,10 @@ INPUT (PRD/task/text)
   |-- [5c] Security Review
   |     |-- Gather diff
   |     |-- Dispatch security-reviewer --> PASS/FAIL
+  |     |-- If FAIL --> [5e]
+  |
+  |-- [5c.5] Legal Compliance Review (if LEGAL_CONFIG != null)
+  |     |-- Dispatch legal-reviewer --> PASS/FAIL
   |     |-- If FAIL --> [5e]
   |
   |-- [5d] Acceptance Review
