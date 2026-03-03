@@ -150,11 +150,11 @@ legal:
 ```
 ## Legal Compliance Review — {project}
 
-| ID       | Obszar                  | Status         | Severity |
-|----------|-------------------------|----------------|----------|
-| GDPR-01  | Podstawa prawna         | NON-COMPLIANT  | CRITICAL |
-| GDPR-02  | Prawo do usunięcia      | ACKNOWLEDGED   | INFO     |
-| CUSTOM-1 | Retencja logów          | NEEDS REVIEW   | MEDIUM   |
+| ID       | Area                    | Status         | Severity | Confidence |
+|----------|-------------------------|----------------|----------|------------|
+| GDPR-01  | Podstawa prawna         | NON-COMPLIANT  | CRITICAL | 95%        |
+| GDPR-02  | Prawo do usunięcia      | ACKNOWLEDGED   | INFO     | —          |
+| CUSTOM-1 | Retencja logów          | NEEDS REVIEW   | MEDIUM   | 75%        |
 
 **Verdict: PASS/FAIL** (X CRITICAL, Y NEEDS REVIEW)
 ```
