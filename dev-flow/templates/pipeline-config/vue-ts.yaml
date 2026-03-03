@@ -85,9 +85,20 @@ agents:
       - Accessibility tested with vitest-axe or similar.
       - No console.error or console.warn in test output.
 
+  legal-reviewer:
+    model: "sonnet"
+    extra_instructions: ""
+
   pm:
     model: "haiku"
     extra_instructions: ""
+
+# Legal compliance configuration (optional)
+# legal:
+#   jurisdictions: [PL, EU]
+#   sectors: []
+#   extras: []
+#   overrides: []
 
 # ---------------------------------------------------------------------------
 # Checks

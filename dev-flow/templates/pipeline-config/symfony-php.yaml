@@ -78,9 +78,20 @@ agents:
       - API tests verify JSON schema, status codes, and error responses.
       - Console commands have integration tests.
 
+  legal-reviewer:
+    model: "sonnet"
+    extra_instructions: ""
+
   pm:
     model: "haiku"
     extra_instructions: ""
+
+# Legal compliance configuration (optional)
+# legal:
+#   jurisdictions: [PL, EU]
+#   sectors: []
+#   extras: [ecommerce]
+#   overrides: []
 
 # ---------------------------------------------------------------------------
 # Checks

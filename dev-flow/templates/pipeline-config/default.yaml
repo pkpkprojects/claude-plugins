@@ -81,7 +81,29 @@ agents:
     # Example: "Enforce 80% code coverage minimum."
     extra_instructions: ""
 
+  legal-reviewer:
+    model: "sonnet"
+    # Example: "Focus on medical device regulations for this project."
+    extra_instructions: ""
+
   pm:
     model: "haiku"
     # Example: "Write ticket summaries in Polish."
     extra_instructions: ""
+
+# ---------------------------------------------------------------------------
+# Legal compliance configuration (optional)
+# ---------------------------------------------------------------------------
+# Uncomment and configure to enable legal-reviewer agent.
+# Without this section, legal reviews are skipped entirely.
+#
+# legal:
+#   jurisdictions: [PL, EU]
+#   sectors: []           # e.g., [medical], [financial]
+#   extras: []            # e.g., [ecommerce], [ai], [platform]
+#   overrides: []
+#     # - check: GDPR-02
+#     #   status: ACKNOWLEDGED
+#     #   reason: "Withdrawal requires account deletion — conscious decision."
+#     #   decided_by: "team-lead"
+#     #   decided_at: "2026-01-15"

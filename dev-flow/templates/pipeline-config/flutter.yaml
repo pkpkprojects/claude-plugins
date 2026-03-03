@@ -85,9 +85,20 @@ agents:
       - Integration tests for critical user flows (integration_test/).
       - No print() statements in production code (use logger).
 
+  legal-reviewer:
+    model: "sonnet"
+    extra_instructions: ""
+
   pm:
     model: "haiku"
     extra_instructions: ""
+
+# Legal compliance configuration (optional)
+# legal:
+#   jurisdictions: [PL, EU]
+#   sectors: [medical]
+#   extras: []
+#   overrides: []
 
 # ---------------------------------------------------------------------------
 # Checks
