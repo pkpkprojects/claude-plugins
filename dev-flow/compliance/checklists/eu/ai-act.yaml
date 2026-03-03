@@ -1,0 +1,67 @@
+name: AI Act (Artificial Intelligence Act)
+version: "2024.1"
+applies_when:
+  jurisdictions: [EU]
+  extras: [ai]
+severity_default: MEDIUM
+
+checks:
+  - id: AIACT-01
+    area: "Klasyfikacja ryzyka systemu AI"
+    question: "Czy system AI został sklasyfikowany pod kątem poziomu ryzyka (niedopuszczalne, wysokie, ograniczone, minimalne)?"
+    severity: CRITICAL
+    hints:
+      - "Szukaj modeli ML/AI w kodzie (import tensorflow, torch, openai, anthropic)"
+      - "Sprawdź czy system podejmuje decyzje wpływające na osoby (scoring, klasyfikacja)"
+      - "Szukaj automatycznego podejmowania decyzji (auto-reject, auto-approve)"
+    remediation: "Przeprowadź klasyfikację ryzyka systemu AI zgodnie z AI Act. Udokumentuj kategorię ryzyka i uzasadnienie. Systemy wysokiego ryzyka wymagają dodatkowych obowiązków (rejestracja, ocena zgodności, monitoring)."
+
+  - id: AIACT-02
+    area: "Przejrzystość — informowanie użytkowników o interakcji z AI"
+    question: "Czy użytkownicy są informowani, że wchodzą w interakcję z systemem AI?"
+    severity: HIGH
+    hints:
+      - "Szukaj chatbotów, asystentów AI, generatorów treści"
+      - "Sprawdź czy interfejs jasno oznacza treści generowane przez AI"
+      - "Szukaj deepfake'ów lub syntetycznych mediów"
+    remediation: "Jasno informuj użytkowników o interakcji z AI. Oznaczaj treści generowane przez AI. Dla chatbotów: dodaj komunikat 'Rozmawiasz z asystentem AI'. Dla treści generowanych: dodaj oznaczenie 'Wygenerowane przez AI'."
+
+  - id: AIACT-03
+    area: "Nadzór ludzki"
+    question: "Czy przewidziano mechanizmy nadzoru ludzkiego nad decyzjami AI?"
+    severity: HIGH
+    hints:
+      - "Szukaj decyzji podejmowanych automatycznie bez review"
+      - "Sprawdź czy istnieje mechanizm override/appeal"
+      - "Szukaj human-in-the-loop w procesach decyzyjnych"
+    remediation: "Zaimplementuj mechanizm nadzoru ludzkiego: możliwość przeglądu decyzji AI przez człowieka, opcja odwołania się od automatycznej decyzji, kill switch do wyłączenia systemu AI w razie problemów."
+
+  - id: AIACT-04
+    area: "Zarządzanie danymi treningowymi"
+    question: "Czy dane użyte do treningu/fine-tuningu AI są odpowiednio zarządzane?"
+    severity: MEDIUM
+    hints:
+      - "Szukaj pipeline'ów trenowania modeli"
+      - "Sprawdź źródła danych treningowych"
+      - "Szukaj dokumentacji dotyczącej jakości i reprezentatywności danych"
+    remediation: "Udokumentuj źródła danych treningowych, zapewnij jakość i reprezentatywność danych, wdróż mechanizmy wykrywania i usuwania biasów, prowadź rejestr datasetów z metadanymi."
+
+  - id: AIACT-05
+    area: "Dokumentacja techniczna"
+    question: "Czy system AI posiada wymaganą dokumentację techniczną?"
+    severity: MEDIUM
+    hints:
+      - "Szukaj dokumentacji modeli AI (model cards, data sheets)"
+      - "Sprawdź czy istnieje opis działania systemu AI"
+      - "Szukaj metryk wydajności i ograniczeń systemu"
+    remediation: "Utwórz dokumentację techniczną systemu AI: opis przeznaczenia, architektura, dane treningowe, metryki wydajności, znane ograniczenia i biasy, instrukcje użytkowania, logi zmian."
+
+  - id: AIACT-06
+    area: "Logowanie i śledzenie"
+    question: "Czy system AI prowadzi logi umożliwiające audyt i śledzenie decyzji?"
+    severity: MEDIUM
+    hints:
+      - "Szukaj logowania decyzji AI (predictions, classifications, recommendations)"
+      - "Sprawdź czy logi zawierają dane wejściowe, wynik i timestamp"
+      - "Szukaj mechanizmów audytu i raportowania"
+    remediation: "Loguj wszystkie istotne decyzje AI: dane wejściowe, wynik, confidence score, timestamp, wersja modelu. Przechowuj logi przez wymagany okres. Zapewnij możliwość audytu i odtworzenia procesu decyzyjnego."

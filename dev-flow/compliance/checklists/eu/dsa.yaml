@@ -1,0 +1,58 @@
+name: Digital Services Act (DSA)
+version: "2024.1"
+applies_when:
+  jurisdictions: [EU]
+  extras: [platform]
+severity_default: MEDIUM
+
+checks:
+  - id: DSA-01
+    area: "Mechanizm zgłaszania nielegalnych treści"
+    question: "Czy platforma posiada mechanizm umożliwiający zgłaszanie nielegalnych treści?"
+    severity: HIGH
+    hints:
+      - "Szukaj przycisków 'Zgłoś' lub 'Report' przy treściach użytkowników"
+      - "Szukaj formularzy zgłoszeń (abuse report, content report)"
+      - "Sprawdź czy istnieje panel moderacji treści"
+    remediation: "Zaimplementuj łatwo dostępny mechanizm zgłaszania nielegalnych treści: przycisk 'Zgłoś' przy każdej treści użytkownika, formularz z kategoriami zgłoszeń, potwierdzenie przyjęcia zgłoszenia, informacja o statusie rozpatrzenia."
+
+  - id: DSA-02
+    area: "Przejrzystość regulaminu"
+    question: "Czy regulamin serwisu jest jasny i łatwo dostępny?"
+    severity: MEDIUM
+    hints:
+      - "Szukaj linków do regulaminu (Terms of Service, ToS)"
+      - "Sprawdź czy regulamin jest napisany zrozumiałym językiem"
+      - "Szukaj informacji o zasadach moderacji treści"
+    remediation: "Upewnij się, że regulamin jest: łatwo dostępny (link w stopce i podczas rejestracji), napisany prostym językiem, zawiera jasne zasady dotyczące moderacji treści i konsekwencji naruszeń."
+
+  - id: DSA-03
+    area: "Powiadamianie użytkowników o moderacji treści"
+    question: "Czy użytkownicy są informowani o decyzjach dotyczących moderacji ich treści?"
+    severity: HIGH
+    hints:
+      - "Szukaj systemu powiadomień o usunięciu/ukryciu treści"
+      - "Sprawdź czy użytkownik otrzymuje uzasadnienie decyzji"
+      - "Szukaj mechanizmu odwołania od decyzji moderacyjnej"
+    remediation: "Powiadamiaj użytkowników o decyzjach moderacyjnych: informacja o usunięciu/ograniczeniu treści, jasne uzasadnienie decyzji z odniesieniem do regulaminu, możliwość odwołania się od decyzji."
+
+  - id: DSA-04
+    area: "Mechanizm rozpatrywania skarg"
+    question: "Czy platforma posiada wewnętrzny system rozpatrywania skarg?"
+    severity: MEDIUM
+    hints:
+      - "Szukaj formularzy skarg/odwołań"
+      - "Sprawdź czy istnieje workflow rozpatrywania skarg"
+      - "Szukaj SLA na rozpatrzenie skargi"
+    remediation: "Zaimplementuj wewnętrzny system rozpatrywania skarg: formularz odwołania od decyzji moderacyjnej, śledzenie statusu skargi, rozpatrzenie przez osobę (nie automat), informacja o wyniku z uzasadnieniem."
+
+  - id: DSA-05
+    area: "Zakaz dark patterns"
+    question: "Czy interfejs jest wolny od dark patterns manipulujących użytkownikami?"
+    severity: HIGH
+    hints:
+      - "Szukaj pre-zaznaczonych checkboxów zgody"
+      - "Szukaj asymetrycznych opcji (duży przycisk 'Akceptuj' vs mały 'Odrzuć')"
+      - "Szukaj manipulacyjnych komunikatów ('Czy na pewno chcesz zrezygnować z...?')"
+      - "Szukaj utrudnionego procesu usunięcia konta lub rezygnacji z subskrypcji"
+    remediation: "Wyeliminuj dark patterns: checkboxy zgody niezaznaczone domyślnie, opcje akceptacji i odrzucenia o równej widoczności, neutralne komunikaty, łatwy proces usunięcia konta i rezygnacji z usług. Przycisk 'Odrzuć wszystkie' musi być tak samo widoczny jak 'Akceptuj wszystkie'."
