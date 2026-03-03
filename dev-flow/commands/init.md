@@ -718,23 +718,23 @@ Do you want to enable legal compliance reviews?
 
 **If Yes:**
 
-1. Ask for jurisdictions using `AskUserQuestion` (multiSelect):
+1. Ask for jurisdictions using `AskUserQuestion` (text input):
    ```
-   Which jurisdictions apply to this project?
-   Options: PL, EU, US, Other
+   Which jurisdictions apply to this project? Enter comma-separated codes (e.g., PL, EU, US):
    ```
+   Parse the response by splitting on commas and trimming whitespace. If the user enters "Other", ask a follow-up for the specific code.
 
-2. Ask for sectors (if any) using `AskUserQuestion` (multiSelect):
+2. Ask for sectors using `AskUserQuestion` (text input):
    ```
-   Does the project belong to a regulated sector?
-   Options: Medical, Financial, None, Other
+   Does the project belong to a regulated sector? Enter comma-separated sectors or "none" (e.g., medical, financial):
    ```
+   If the response is "none" or empty, set sectors to an empty list.
 
-3. Ask for extras using `AskUserQuestion` (multiSelect):
+3. Ask for extras using `AskUserQuestion` (text input):
    ```
-   Which additional contexts apply?
-   Options: E-commerce, AI/ML, Platform (UGC), None, Other
+   Which additional contexts apply? Enter comma-separated values or "none" (e.g., ecommerce, ai, platform):
    ```
+   If the response is "none" or empty, set extras to an empty list.
 
 4. Append the `legal` section to the already-written `config.yaml`:
 

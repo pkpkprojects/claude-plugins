@@ -46,6 +46,10 @@ The user invokes dev-flow with either a file path or inline text. Your first job
 - `TASK_TEXT` must be non-empty and contain at least one sentence of meaningful content.
 - If `TASK_TEXT` is too short (fewer than 20 characters), ask the user to provide more detail using `AskUserQuestion`.
 
+### Step 1.2b: Detect Legal Review Override
+
+During input parsing, scan `TASK_TEXT` for a `legal_review: false` directive. If found, store `LEGAL_REVIEW_ENABLED = false`; otherwise default to `true`. This flag can appear as YAML frontmatter in the PRD or as an inline directive anywhere in the task text. Steps 3.5b and 5c.5 check this flag to skip legal review when disabled.
+
 ### Step 1.3: Detect Project Context
 
 1. Determine the project root by looking for markers in the current working directory and parent directories:
@@ -265,7 +269,7 @@ Parse this plan and extract:
 
 ### Step 3.5b: Legal Plan Review (Conditional)
 
-**Entry condition:** `LEGAL_CONFIG` is not null AND the task is not tagged as `hotfix` or `refactor` AND `legal_review` is not explicitly set to `false` in the task/PRD.
+**Entry condition:** `LEGAL_CONFIG` is not null AND the task is not tagged as `hotfix` or `refactor` AND `LEGAL_REVIEW_ENABLED` is `true` (see Step 1.2b).
 
 1. Dispatch a **fresh agent** for the legal-reviewer.
 
@@ -576,7 +580,7 @@ Parse the security reviewer's output:
 
 ### Step 5c.5: Legal Compliance Review (Conditional)
 
-**Entry condition:** `LEGAL_CONFIG` is not null AND the task is not tagged as `hotfix` or `refactor` AND `legal_review` is not `false`.
+**Entry condition:** `LEGAL_CONFIG` is not null AND the task is not tagged as `hotfix` or `refactor` AND `LEGAL_REVIEW_ENABLED` is `true` (see Step 1.2b).
 
 **Step 5c.5.1: Dispatch legal-reviewer**
 
