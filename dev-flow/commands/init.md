@@ -699,7 +699,42 @@ If the project is a monorepo:
 
 ---
 
-## Step 6: Present Results to User
+## Step 6: Configure .gitignore
+
+Set up `.gitignore` so only config files are tracked and runtime artifacts (review reports, watchdog files, plans, worktrees) are automatically ignored.
+
+1. Check if `${PROJECT_ROOT}/.gitignore` exists. If not, create it.
+2. Check if it already contains `.claude/` patterns (search for the marker comment `# Claude dev-flow`). If patterns already exist, skip this step.
+3. Append the following block to `.gitignore`:
+
+```gitignore
+# Claude dev-flow: track config only, ignore runtime artifacts
+.claude/*
+!.claude/dev-flow/
+!.claude/hooks.json
+.claude/dev-flow/*
+!.claude/dev-flow/config.yaml
+!.claude/dev-flow/review/
+!.claude/dev-flow/sub-projects/
+.claude/dev-flow/review/*
+!.claude/dev-flow/review/checks.yaml
+.claude/dev-flow/sub-projects/**/*
+!.claude/dev-flow/sub-projects/*/config.yaml
+```
+
+4. Show the user a summary:
+   - **Tracked (committed):** `config.yaml`, `checks.yaml`, `hooks.json`, sub-project configs
+   - **Ignored (runtime):** review reports, watchdog files, plans, worktrees, `settings.local.json`, everything else under `.claude/`
+
+5. Verify with `Bash`:
+```bash
+cd ${PROJECT_ROOT} && git check-ignore .claude/dev-flow/reviews/test.md && echo "OK: runtime artifacts are ignored"
+git check-ignore .claude/dev-flow/config.yaml || echo "OK: config.yaml is tracked"
+```
+
+---
+
+## Step 7: Present Results to User
 
 Display a clear summary of what was detected and generated:
 
@@ -717,7 +752,12 @@ Display a clear summary of what was detected and generated:
 ### Files Created
 - `.claude/dev-flow/config.yaml` -- main pipeline configuration
 - `.claude/dev-flow/review/checks.yaml` -- review checks configuration
+- `.gitignore` -- updated with Claude dev-flow patterns (allowlist approach)
 [- `.claude/dev-flow/sub-projects/<name>/config.yaml` -- for each sub-project, if monorepo]
+
+### Version Control
+- **Tracked:** `config.yaml`, `checks.yaml`, `hooks.json`, sub-project `config.yaml` files
+- **Ignored:** review reports, watchdog files, plans, worktrees, `settings.local.json`, all other runtime artifacts
 
 ### Active Checks
 - [x] Tests pass (`[detected test command]`)
@@ -745,19 +785,26 @@ If any detection was uncertain, mention it explicitly so the user can correct it
 
 ---
 
-## Step 7: Commit Generated Configuration
+## Step 8: Commit Generated Configuration
 
-After presenting results to the user, commit the generated configuration files:
+After presenting results to the user, commit the generated configuration files explicitly (not the whole directory):
 
 ```bash
-git add .claude/dev-flow/
-git commit -m "chore(dev-flow): initialize pipeline configuration
+git add .gitignore
+git add .claude/dev-flow/config.yaml
+git add .claude/dev-flow/review/checks.yaml
+git add .claude/hooks.json 2>/dev/null || true
+# For monorepos:
+git add .claude/dev-flow/sub-projects/*/config.yaml 2>/dev/null || true
+
+git commit -m "chore(dev-flow): initialize pipeline configuration with gitignore
 
 Detected stack: [stack tags]. Template: [template name].
-Enabled checks: [list of enabled check IDs]."
+Enabled checks: [list of enabled check IDs].
+Configured .gitignore to track config only, ignore runtime artifacts."
 ```
 
-This ensures the pipeline config is tracked in version control from the start.
+This ensures the pipeline config is tracked in version control from the start, while runtime artifacts are automatically ignored.
 
 ---
 
