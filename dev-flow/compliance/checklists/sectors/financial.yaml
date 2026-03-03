@@ -1,0 +1,56 @@
+name: Financial Sector Compliance
+version: "2024.1"
+applies_when:
+  sectors: [financial]
+severity_default: HIGH
+
+checks:
+  - id: FIN-01
+    area: "PSD2 — Strong Customer Authentication"
+    question: "Czy uwierzytelnianie płatności spełnia wymogi SCA (Strong Customer Authentication) z PSD2?"
+    severity: CRITICAL
+    hints:
+      - "Szukaj implementacji płatności (Stripe, PayU, Przelewy24)"
+      - "Sprawdź czy płatności wymagają 2FA/3DS"
+      - "Szukaj integracji z bramkami płatności obsługującymi SCA"
+    remediation: "Zapewnij Strong Customer Authentication dla płatności online: integracja z 3D Secure 2.0, użycie bramki płatności obsługującej SCA (Stripe, PayU). Wyjątki od SCA (małe kwoty, zaufani beneficjenci) muszą być poprawnie zaimplementowane."
+
+  - id: FIN-02
+    area: "KYC — Know Your Customer"
+    question: "Czy zaimplementowano procedury weryfikacji tożsamości klienta (KYC)?"
+    severity: HIGH
+    hints:
+      - "Szukaj weryfikacji tożsamości przy rejestracji"
+      - "Szukaj integracji z usługami weryfikacji (Onfido, Jumio, ID verification)"
+      - "Sprawdź czy przechowywane są dokumenty tożsamości"
+    remediation: "Zaimplementuj procedurę KYC odpowiednią do poziomu ryzyka: weryfikacja danych osobowych, weryfikacja dokumentu tożsamości (dla wyższego ryzyka), monitoring transakcji. Dla usług finansowych objętych AML — pełna weryfikacja tożsamości."
+
+  - id: FIN-03
+    area: "AML — Anti Money Laundering"
+    question: "Czy zaimplementowano mechanizmy przeciwdziałania praniu pieniędzy?"
+    severity: HIGH
+    hints:
+      - "Szukaj monitoringu transakcji (podejrzane wzorce, progi kwotowe)"
+      - "Szukaj screeningu PEP (Politically Exposed Persons)"
+      - "Szukaj mechanizmów raportowania podejrzanych transakcji"
+    remediation: "Zaimplementuj: monitoring transakcji pod kątem podejrzanych wzorców, screening klientów względem list sankcyjnych i PEP, procedurę zgłaszania podejrzanych transakcji do GIIF (Generalny Inspektor Informacji Finansowej), przechowywanie dokumentacji transakcji przez 5 lat."
+
+  - id: FIN-04
+    area: "Przechowywanie danych transakcyjnych"
+    question: "Czy dane transakcyjne są przechowywane przez wymagany okres?"
+    severity: MEDIUM
+    hints:
+      - "Szukaj polityki retencji danych transakcyjnych"
+      - "Sprawdź czy transakcje są archiwizowane a nie usuwane"
+      - "Szukaj mechanizmów przechowywania dokumentacji finansowej"
+    remediation: "Przechowuj dane transakcyjne przez minimum 5 lat (Ustawa o rachunkowości) lub 5 lat od końca roku podatkowego. Dane AML przechowuj 5 lat od zakończenia relacji z klientem. Zaimplementuj politykę retencji z automatyczną archiwizacją."
+
+  - id: FIN-05
+    area: "Raportowanie do KNF"
+    question: "Czy spełnione są wymogi raportowania do Komisji Nadzoru Finansowego (jeśli dotyczy)?"
+    severity: MEDIUM
+    hints:
+      - "Szukaj integracji z systemami raportowania KNF"
+      - "Sprawdź czy działalność wymaga licencji KNF"
+      - "Szukaj dokumentacji wymogów regulacyjnych"
+    remediation: "Jeśli usługa finansowa podlega nadzorowi KNF, zapewnij: zgodność z wymogami raportowania, bezpieczeństwo IT zgodne z rekomendacjami KNF (Rekomendacja D), plan ciągłości działania. To jest wymóg organizacyjny — udokumentuj status licencji i obowiązki raportowe."

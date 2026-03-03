@@ -1,0 +1,56 @@
+name: Medical Sector Compliance
+version: "2024.1"
+applies_when:
+  sectors: [medical]
+severity_default: HIGH
+
+checks:
+  - id: MED-01
+    area: "Dane zdrowotne — art. 9 RODO szczególne kategorie"
+    question: "Czy przetwarzanie danych zdrowotnych (szczególna kategoria danych osobowych) ma wyraźną podstawę prawną?"
+    severity: CRITICAL
+    hints:
+      - "Szukaj modeli/encji przechowujących dane zdrowotne (diagnoza, leczenie, pomiary)"
+      - "Szukaj pól typu: diagnosis, treatment, health_status, medical_record"
+      - "Sprawdź czy dane zdrowotne są oddzielone od danych ogólnych"
+    remediation: "Przetwarzanie danych zdrowotnych wymaga wyraźnej podstawy z art. 9 ust. 2 RODO (np. wyraźna zgoda, cele zdrowotne, interes publiczny). Udokumentuj podstawę prawną. Rozważ oddzielenie danych zdrowotnych od danych ogólnych w architekturze bazy danych."
+
+  - id: MED-02
+    area: "Zgoda na przetwarzanie danych zdrowotnych"
+    question: "Czy uzyskiwana jest wyraźna zgoda na przetwarzanie danych zdrowotnych?"
+    severity: CRITICAL
+    hints:
+      - "Szukaj formularzy zgody specyficznych dla danych medycznych"
+      - "Sprawdź czy zgoda jest wyraźna (explicit consent), nie dorozumiana"
+      - "Szukaj mechanizmu wycofania zgody na przetwarzanie danych zdrowotnych"
+    remediation: "Uzyskaj wyraźną, szczegółową zgodę na przetwarzanie danych zdrowotnych. Zgoda musi być oddzielna od innych zgód, jasno opisywać cel przetwarzania danych zdrowotnych i informować o prawie do wycofania. Przechowuj dowód zgody."
+
+  - id: MED-03
+    area: "Ograniczenie dostępu do danych medycznych"
+    question: "Czy dostęp do danych medycznych jest ograniczony do upoważnionych osób?"
+    severity: HIGH
+    hints:
+      - "Szukaj kontroli dostępu opartej na rolach (RBAC) dla danych medycznych"
+      - "Sprawdź czy istnieją osobne uprawnienia dla danych zdrowotnych"
+      - "Szukaj logowania dostępu do danych medycznych (audit trail)"
+    remediation: "Zaimplementuj granularną kontrolę dostępu: role z dostępem do danych medycznych (lekarz, pielęgniarka), audit trail dostępu do danych pacjenta, zasada minimalnych uprawnień. Loguj każdy dostęp do danych medycznych."
+
+  - id: MED-04
+    area: "Retencja danych medycznych zgodna z regulacjami"
+    question: "Czy okres przechowywania danych medycznych jest zgodny z obowiązującymi regulacjami?"
+    severity: HIGH
+    hints:
+      - "Szukaj polityki retencji danych"
+      - "Sprawdź czy istnieje mechanizm automatycznego usuwania/archiwizacji"
+      - "Szukaj konfiguracji okresu przechowywania danych medycznych"
+    remediation: "Dokumentacja medyczna musi być przechowywana przez 20 lat od ostatniego wpisu (Ustawa o prawach pacjenta). Zaimplementuj politykę retencji z automatycznym oznaczaniem danych do archiwizacji/usunięcia po upływie okresu."
+
+  - id: MED-05
+    area: "Rozporządzenie o wyrobach medycznych (MDR) — klasyfikacja"
+    question: "Czy aplikacja została oceniona pod kątem klasyfikacji jako wyrób medyczny (MDR 2017/745)?"
+    severity: MEDIUM
+    hints:
+      - "Szukaj funkcji diagnostycznych lub terapeutycznych"
+      - "Sprawdź czy aplikacja wydaje rekomendacje medyczne"
+      - "Szukaj algorytmów wpływających na decyzje kliniczne"
+    remediation: "Oceń czy aplikacja kwalifikuje się jako wyrób medyczny wg MDR (np. oprogramowanie wspomagające diagnostykę). Jeśli tak, wymaga certyfikacji CE, dokumentacji technicznej i systemu zarządzania jakością. To jest wymóg organizacyjny — udokumentuj status klasyfikacji."
