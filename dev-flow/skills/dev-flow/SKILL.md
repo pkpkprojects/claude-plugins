@@ -1,7 +1,7 @@
 ---
 name: dev-flow
 description: "Full development workflow orchestrator - from PRD/task to committed, reviewed code. Manages architect, UX designer, implementer, security reviewer, acceptance gate, and PM oversight."
-allowed-tools: Read, Glob, Grep, Bash, Write, Edit, Task, TaskCreate, TaskUpdate, TaskList, TeamCreate, SendMessage, AskUserQuestion, Skill
+allowed-tools: Read, Glob, Grep, Bash, Write, Edit, Agent, TaskCreate, TaskUpdate, TaskList, TeamCreate, TeamDelete, SendMessage, AskUserQuestion, Skill
 ---
 
 # Dev-Flow Orchestrator -- Master Pipeline
@@ -194,11 +194,12 @@ This phase is **always executed**. It produces an approved implementation plan t
 
 ### Step 3.1: Dispatch Architect Agent
 
-Create a **new Task** (fresh subagent) for the architect:
+Create a **fresh agent** for the architect:
 
 ```
-Tool: Task
+Tool: Agent
 subagent_type: general-purpose
+name: "architect"
 ```
 
 **Prompt to architect must include ALL of the following, inline (not as file references):**
@@ -239,7 +240,7 @@ Please answer the questions above and indicate your preferred approach.
 
 ### Step 3.4: Feed Answers Back to Architect
 
-Send the user's answers back to the architect agent. Since this is a Task-based subagent, dispatch a **new Task** that includes:
+Send the user's answers back to the architect agent. Dispatch a **new agent** that includes:
 1. The original TASK_TEXT
 2. The architect's initial analysis
 3. The user's answers
@@ -265,7 +266,7 @@ Parse this plan and extract:
 
 **Entry condition:** `LEGAL_CONFIG` is not null AND the task is not tagged as `hotfix` or `refactor` AND `legal_review` is not explicitly set to `false` in the task/PRD.
 
-1. Dispatch a **new Task** (fresh subagent) for the legal-reviewer:
+1. Dispatch a **fresh agent** for the legal-reviewer:
 
    **Prompt must include ALL of the following inline:**
    - **Role assignment**: "You are the legal-reviewer agent. Review the following implementation plan for legal compliance requirements. Use Mode 1: Plan Review."
@@ -301,7 +302,7 @@ Do you approve this plan? You can:
 ### Step 3.7: Handle User Response
 
 - **Approved**: Store as `APPROVED_PLAN`. Proceed to Phase 4 or Phase 5.
-- **Changes requested**: Dispatch a **new architect Task** with the original plan + user's change requests. Go back to Step 3.5.
+- **Changes requested**: Dispatch a **new architect agent** with the original plan + user's change requests. Go back to Step 3.5.
 - **Rejected**: Go back to Step 3.1 with any additional context the user provides.
 
 ---
@@ -329,7 +330,7 @@ If either condition is false, skip directly to Phase 5.
 
 ### Step 4.2: Dispatch UX Designer Agent
 
-Create a **new Task** (fresh subagent) for the UX designer:
+Create a **fresh agent** for the UX designer:
 
 **Prompt must include ALL of the following inline:**
 
@@ -378,14 +379,28 @@ Do you approve the design system? You can:
 ### Step 4.5: Handle User Response
 
 - **Approved**: The designer commits the design system (`git add design-system/ && git commit`). Store design system state. Proceed to Phase 5.
-- **Changes requested**: Dispatch a **new UX designer Task** with the original output + user's feedback. Return to Step 4.3.
+- **Changes requested**: Dispatch a **new UX designer agent** with the original output + user's feedback. Return to Step 4.3.
 - **Skipped**: Set `HAS_DESIGN_SYSTEM_OUTPUT = false`. Proceed to Phase 5 without design system references.
 
 ---
 
 ## 5. Implementation Loop (Per Phase, Autonomous)
 
-This is the core execution loop. The orchestrator manages **2 implementer slots** that run phases through the implementation-review cycle.
+This is the core execution loop. The orchestrator manages a **team** of agents that run phases through the implementation-review cycle.
+
+### Step 5.0: Create Implementation Team
+
+At the start of the implementation loop, create a team for coordinating all agents:
+
+```
+TeamCreate(team_name="{project-name}-impl", description="Implementation team for {APPROVED_PLAN title}")
+```
+
+This team will contain:
+- Up to 2 implementer agents (spawned per phase)
+- Review agents (security-reviewer, legal-reviewer, acceptance-reviewer) — spawned as needed
+
+All agents within the team share a `TaskList` for coordination.
 
 ### Phase Execution Order
 
@@ -398,7 +413,7 @@ This is the core execution loop. The orchestrator manages **2 implementer slots*
 
 3. Track phase status: `WAITING`, `READY`, `IN_PROGRESS`, `REVIEW`, `FIXING`, `COMPLETE`, `SKIPPED`, `ESCALATED`.
 
-4. **Implementer lifecycle:** Fresh agent spawned per phase. Same agent reused for fix iterations within the same phase. Agent shut down when phase completes.
+4. **Implementer lifecycle:** Fresh agent spawned per phase within the team. Same agent reused for fix iterations within the same phase (via `SendMessage`). Agent shut down when phase completes.
 
 ### Step 5a: Pre-Implementation Design Update (Conditional)
 
@@ -408,7 +423,7 @@ This is the core execution loop. The orchestrator manages **2 implementer slots*
 - AND this phase needs design components not yet in the design system
 
 If triggered:
-1. Dispatch a **new UX designer Task** with:
+1. Dispatch a **new UX designer agent** with:
    - The specific phase description
    - Current design system inventory
    - Instruction: "Create ONLY the components needed for this specific phase. This is a targeted update, not a full redesign."
@@ -417,7 +432,14 @@ If triggered:
 
 ### Step 5b: Implementation (via Implementer Slots)
 
-The orchestrator spawns a **fresh implementer agent** in an available slot (§3.3b in dev-flow.md). Each implementer receives ONLY its assigned phase — not the full plan.
+The orchestrator spawns a **fresh implementer agent** as a team member using the `Agent` tool with `team_name`. Each implementer receives ONLY its assigned phase — not the full plan.
+
+```
+Tool: Agent
+subagent_type: general-purpose
+name: "implementer-{slot}"
+team_name: "{project-name}-impl"
+```
 
 **Prompt must include ALL of the following inline (CRITICAL: pass complete text, NOT file paths):**
 
@@ -473,7 +495,7 @@ The orchestrator spawns a **fresh implementer agent** in an available slot (§3.
 
 ### Step 5c: Security Review
 
-After the implementer completes, dispatch a **security-reviewer agent** as a **fresh subagent**:
+After the implementer completes, dispatch a **security-reviewer agent** as a team member:
 
 **Step 5c.1: Gather the diff**
 
@@ -488,8 +510,10 @@ If the implementer made multiple commits, adjust the range to capture all change
 **Step 5c.2: Dispatch security-reviewer**
 
 ```
-Tool: Task
+Tool: Agent
 subagent_type: general-purpose
+name: "security-reviewer"
+team_name: "{project-name}-impl"
 ```
 
 **Prompt must include ALL of the following inline:**
@@ -547,11 +571,13 @@ Parse the security reviewer's output:
 
 **Step 5c.5.1: Dispatch legal-reviewer**
 
-Create a **new Task** (fresh subagent):
+Create a team member for legal review:
 
 ```
-Tool: Task
+Tool: Agent
 subagent_type: general-purpose
+name: "legal-reviewer"
+team_name: "{project-name}-impl"
 ```
 
 **Prompt must include ALL of the following inline:**
@@ -621,7 +647,7 @@ Parse the legal reviewer's output:
 
 ### Step 5d: Acceptance Review
 
-After security review passes, dispatch an **acceptance-reviewer agent** as a **fresh subagent**:
+After security and legal reviews pass, dispatch an **acceptance-reviewer agent** as a team member:
 
 **Step 5d.1: Gather the diff**
 
@@ -630,8 +656,10 @@ Same as Step 5c.1 -- capture the git diff for this phase's changes.
 **Step 5d.2: Dispatch acceptance-reviewer**
 
 ```
-Tool: Task
+Tool: Agent
 subagent_type: general-purpose
+name: "acceptance-reviewer"
+team_name: "{project-name}-impl"
 ```
 
 **Prompt must include ALL of the following inline:**
@@ -741,9 +769,9 @@ The implementer then:
 
 After the implementer completes fixes:
 
-- If the security review failed: re-run Step 5c (fresh security-reviewer subagent).
-- If the legal review failed: re-run Step 5c.5 (fresh legal-reviewer subagent).
-- If the acceptance review failed: re-run Step 5d (fresh acceptance-reviewer subagent).
+- If the security review failed: re-run Step 5c (fresh security-reviewer agent in team).
+- If the legal review failed: re-run Step 5c.5 (fresh legal-reviewer agent in team).
+- If the acceptance review failed: re-run Step 5d (fresh acceptance-reviewer agent in team).
 - If multiple failed: re-run in order: security review → legal review → acceptance review (each only if the previous passes).
 
 **Step 5e.4: Evaluate and Loop**
@@ -830,11 +858,13 @@ Build a summary document covering all phases:
 
 ### Step 6.2: Dispatch PM Agent
 
-Create a **new Task** (fresh subagent) for the PM:
+Create a PM agent as a team member:
 
 ```
-Tool: Task
+Tool: Agent
 subagent_type: general-purpose
+name: "pm"
+team_name: "{project-name}-impl"
 ```
 
 **Prompt must include ALL of the following inline:**
@@ -968,11 +998,19 @@ Would you like to:
 3. Accept the current state as-is
 ```
 
-### Step 7.3: Handle User Response
+### Step 7.3: Shutdown Team
+
+Before handling user response, gracefully shut down the implementation team:
+
+1. Send `SendMessage` with `type: "shutdown_request"` to each active teammate.
+2. Wait for shutdown confirmations.
+3. Call `TeamDelete` to clean up team resources.
+
+### Step 7.4: Handle User Response
 
 - **Create PR / finish branch**: Invoke the `superpowers:finishing-a-development-branch` skill. This handles branch management, PR creation, and any final cleanup.
-- **Address warnings**: Identify the specific phases that need rework and re-enter the Implementation Loop (Phase 5) for those phases only.
-- **Re-run implementation**: Identify failing areas, create targeted fix phases, and re-enter Phase 5.
+- **Address warnings**: Identify the specific phases that need rework. Create a new team (Step 5.0) and re-enter the Implementation Loop (Phase 5) for those phases only.
+- **Re-run implementation**: Identify failing areas, create targeted fix phases. Create a new team and re-enter Phase 5.
 - **Continue**: Ask for new input and start from Phase 1 (preserving the current config and state).
 - **Done**: Thank the user and end the pipeline.
 
@@ -993,11 +1031,28 @@ This gives the best of both worlds:
 - Context preservation during fix iterations (agent remembers its own code)
 - Failed agents do not corrupt state for retry attempts
 
-**Non-implementer agents** (reviewers, architect, UX designer) remain persistent for the full pipeline as team members.
+**Non-implementer agents** (reviewers, PM) are spawned as needed within the team and shut down after their task completes.
+
+### Team-Based Execution
+
+**CRITICAL**: All agents are spawned within a shared team using `TeamCreate` + `Agent` with `team_name`. This replaces the previous subagent-driven model.
+
+Benefits:
+- Agents can communicate via `SendMessage` (feedback loops, clarifications)
+- Shared `TaskList` for coordination
+- Orchestrator has visibility into all agent activity
+- Graceful shutdown via `SendMessage` with `type: "shutdown_request"`
+
+Team lifecycle:
+1. `TeamCreate` at the start of Section 5
+2. Spawn agents as team members using `Agent` with `team_name`
+3. Use `SendMessage` for inter-agent communication (especially feedback loops)
+4. `SendMessage` with `type: "shutdown_request"` for each teammate at the end
+5. `TeamDelete` after all agents have shut down
 
 ### Full Text in Prompt
 
-**CRITICAL**: Always pass the complete text of tasks, plans, diffs, and feedback directly in the prompt to the subagent. Never pass file paths expecting the agent to read them. Reasons:
+**CRITICAL**: Always pass the complete text of tasks, plans, diffs, and feedback directly in the prompt to agents. Never pass file paths expecting the agent to read them. Reasons:
 
 - Agents may not have access to the same filesystem state.
 - File contents may change between dispatch and agent execution.
@@ -1007,12 +1062,12 @@ Exception: For very large diffs (>50KB), write the diff to a temporary file and 
 
 ### Parallel Dispatch (2 Implementer Slots)
 
-The orchestrator manages 2 implementer slots that can run phases concurrently:
+The orchestrator manages 2 implementer slots within the team that can run phases concurrently:
 
 1. Identify READY phases (dependencies met, not yet assigned).
 2. Check file overlap between candidate phase and any currently IN_PROGRESS phase.
-3. If no overlap and a slot is free → spawn a fresh implementer in that slot.
-4. Reviews run via persistent reviewer agents (security-reviewer, acceptance-reviewer) who pick up tasks from TaskList.
+3. If no overlap and a slot is free → spawn a fresh implementer agent in the team.
+4. Reviews run via fresh reviewer agents spawned in the team as needed.
 
 **Important**: Parallel phases must not touch overlapping files. If two parallel phases modify the same file, they MUST be serialized. The orchestrator checks `files_to_touch` overlap before assignment (§3.1b).
 
@@ -1089,9 +1144,9 @@ Update this state after every significant action. Use it to make decisions about
 
 ### Agent Failure or Timeout
 
-If a subagent Task fails or times out:
+If a team agent fails or times out:
 
-1. **Retry once**: Dispatch a new Task with the same prompt.
+1. **Retry once**: Dispatch a new agent in the team with the same prompt.
 2. **If retry fails**: Report to user via `AskUserQuestion`:
    ```
    The {agent_role} agent failed to complete its task.
@@ -1147,14 +1202,14 @@ If a git operation fails due to conflicts (e.g., during parallel implementation)
 If the architect produces a plan that is missing required sections:
 
 1. Do NOT proceed with an incomplete plan.
-2. Dispatch a new architect Task with the incomplete plan and instruction: "This plan is missing the following required sections: {list}. Please complete them."
+2. Dispatch a new architect agent with the incomplete plan and instruction: "This plan is missing the following required sections: {list}. Please complete them."
 3. If the second attempt is also incomplete, present what exists to the user and note the gaps.
 
 ---
 
 ## Agent Dispatch Reference
 
-Quick reference for dispatching each agent type. Every dispatch uses the `Task` tool with `subagent_type: general-purpose`.
+Quick reference for dispatching each agent type. Every dispatch uses the `Agent` tool with `subagent_type: general-purpose` and `team_name: "{project-name}-impl"`.
 
 ### Architect
 
