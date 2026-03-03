@@ -225,6 +225,10 @@ agents:
     model: "sonnet"
     extra_instructions: ""
 
+  legal-reviewer:
+    model: "sonnet"
+    extra_instructions: ""
+
   pm:
     model: "haiku"
     extra_instructions: ""
@@ -232,13 +236,14 @@ agents:
 
 **CRITICAL -- `agents:` section rules:**
 1. Copy the `agents:` section EXACTLY as shown above. Do NOT rename keys or change models.
-2. Agent keys MUST use **hyphens** (not underscores): `ux-designer`, `security-reviewer`, `acceptance-reviewer`
+2. Agent keys MUST use **hyphens** (not underscores): `ux-designer`, `security-reviewer`, `acceptance-reviewer`, `legal-reviewer`
 3. Default models are FIXED and must NOT be changed:
    - `architect`: **opus**
    - `ux-designer`: **opus**
    - `implementer`: **sonnet**
    - `security-reviewer`: **sonnet**
    - `acceptance-reviewer`: **sonnet**
+   - `legal-reviewer`: **sonnet**
    - `pm`: **haiku**
 4. Customize the `extra_instructions` field per agent based on detected stack (see 4.1.1 below).
 5. Do NOT add extra sections (like `infrastructure:` or `architecture:`) -- the config schema is defined by the template. Any project-specific context goes into agent `extra_instructions`.
@@ -699,6 +704,54 @@ If the project is a monorepo:
 
 ---
 
+## Step 5.5: Legal Compliance Configuration (Optional)
+
+After generating the base configuration, ask the user if they want to enable legal compliance reviews:
+
+Use `AskUserQuestion`:
+
+```
+Do you want to enable legal compliance reviews?
+1. Yes — configure jurisdictions and sectors
+2. No — skip (can be added later in config.yaml)
+```
+
+**If Yes:**
+
+1. Ask for jurisdictions using `AskUserQuestion` (multiSelect):
+   ```
+   Which jurisdictions apply to this project?
+   Options: PL, EU, US, Other
+   ```
+
+2. Ask for sectors (if any) using `AskUserQuestion` (multiSelect):
+   ```
+   Does the project belong to a regulated sector?
+   Options: Medical, Financial, None, Other
+   ```
+
+3. Ask for extras using `AskUserQuestion` (multiSelect):
+   ```
+   Which additional contexts apply?
+   Options: E-commerce, AI/ML, Platform (UGC), None, Other
+   ```
+
+4. Append the `legal` section to the already-written `config.yaml`:
+
+   ```yaml
+   legal:
+     jurisdictions: [{selected jurisdictions}]
+     sectors: [{selected sectors, empty if None}]
+     extras: [{selected extras, empty if None}]
+     overrides: []
+   ```
+
+   Use `Edit` to append this section to `${PROJECT_ROOT}/.claude/dev-flow/config.yaml`.
+
+**If No:** Do nothing. The absence of the `legal` section means legal reviews are skipped.
+
+---
+
 ## Step 6: Configure .gitignore
 
 Set up `.gitignore` so only config files are tracked and runtime artifacts (review reports, watchdog files, plans, worktrees) are automatically ignored.
@@ -748,6 +801,7 @@ Display a clear summary of what was detected and generated:
 - **Database:** [yes/no - what was detected]
 - **i18n:** [yes/no - what was detected]
 - **Design System:** [yes/no - where]
+- **Legal Compliance:** [enabled/disabled - jurisdictions and sectors if enabled]
 
 ### Files Created
 - `.claude/dev-flow/config.yaml` -- main pipeline configuration
