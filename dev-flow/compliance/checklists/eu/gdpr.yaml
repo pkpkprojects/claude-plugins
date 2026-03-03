@@ -1,0 +1,125 @@
+name: GDPR / RODO
+version: "2024.1"
+applies_when:
+  jurisdictions: [EU]
+severity_default: HIGH
+
+checks:
+  - id: GDPR-01
+    area: "Podstawa prawna przetwarzania"
+    question: "Czy każde przetwarzanie danych osobowych ma zdefiniowaną podstawę prawną (art. 6)?"
+    severity: CRITICAL
+    hints:
+      - "Szukaj formularzy zbierających dane osobowe"
+      - "Sprawdź czy istnieje rejestr czynności przetwarzania"
+      - "Szukaj modeli/encji przechowujących dane użytkowników"
+    remediation: "Zdefiniuj podstawę prawną dla każdej operacji przetwarzania danych (zgoda, umowa, obowiązek prawny, interes publiczny, żywotne interesy, prawnie uzasadniony interes)"
+
+  - id: GDPR-02
+    area: "Warunki wyrażenia zgody"
+    question: "Czy zgody są zbierane w sposób dobrowolny, konkretny, świadomy i jednoznaczny (art. 7)?"
+    severity: HIGH
+    hints:
+      - "Szukaj checkboxów zgody w formularzach"
+      - "Sprawdź czy zgody nie są pre-zaznaczone"
+      - "Sprawdź czy zgoda na marketing jest oddzielna od zgody na ToS"
+    remediation: "Upewnij się, że zgody są granularne (osobne checkboxy), niezaznaczone domyślnie, z jasnym opisem celu przetwarzania. Użytkownik musi mieć możliwość wycofania zgody w dowolnym momencie."
+
+  - id: GDPR-03
+    area: "Obowiązek informacyjny"
+    question: "Czy użytkownik jest informowany o przetwarzaniu danych zgodnie z art. 13/14?"
+    severity: HIGH
+    hints:
+      - "Szukaj linków do polityki prywatności przy formularzach"
+      - "Sprawdź czy polityka prywatności zawiera wymagane informacje (administrator, cel, podstawa, okres, prawa)"
+      - "Szukaj klauzul informacyjnych"
+    remediation: "Dodaj klauzulę informacyjną lub link do polityki prywatności przy każdym punkcie zbierania danych. Polityka musi zawierać: dane administratora, cel przetwarzania, podstawę prawną, okres przechowywania, prawa osoby."
+
+  - id: GDPR-04
+    area: "Prawo dostępu"
+    question: "Czy użytkownik ma możliwość uzyskania kopii swoich danych (art. 15)?"
+    severity: HIGH
+    hints:
+      - "Szukaj endpointów eksportu danych"
+      - "Szukaj funkcji 'pobierz moje dane' lub 'export'"
+      - "Sprawdź panel ustawień konta użytkownika"
+    remediation: "Zaimplementuj mechanizm umożliwiający użytkownikowi pobranie kopii swoich danych w powszechnie stosowanym formacie (JSON, CSV). Endpoint GET /api/users/me/data-export lub podobny."
+
+  - id: GDPR-05
+    area: "Prawo do usunięcia danych"
+    question: "Czy użytkownik może zażądać usunięcia swoich danych (art. 17)?"
+    severity: HIGH
+    hints:
+      - "Szukaj funkcji usuwania konta"
+      - "Sprawdź czy usunięcie konta faktycznie usuwa dane (nie tylko soft-delete)"
+      - "Szukaj endpointów DELETE /users lub /account"
+    remediation: "Zaimplementuj funkcję usuwania konta, która faktycznie usuwa dane osobowe (lub anonimizuje je, jeśli retencja jest wymagana prawnie). Dodaj opcję 'Usuń moje konto' w ustawieniach."
+
+  - id: GDPR-06
+    area: "Prawo do przenoszenia danych"
+    question: "Czy użytkownik może pobrać swoje dane w formacie nadającym się do przeniesienia (art. 20)?"
+    severity: MEDIUM
+    hints:
+      - "Szukaj eksportu danych w formacie JSON/CSV/XML"
+      - "Sprawdź czy eksport zawiera wszystkie dane dostarczone przez użytkownika"
+    remediation: "Zaimplementuj eksport danych użytkownika w ustrukturyzowanym, powszechnie stosowanym formacie (JSON, CSV). Eksport powinien obejmować wszystkie dane dostarczone przez użytkownika."
+
+  - id: GDPR-07
+    area: "Privacy by design & default"
+    question: "Czy aplikacja implementuje zasadę ochrony danych w fazie projektowania i domyślnej ochrony danych (art. 25)?"
+    severity: HIGH
+    hints:
+      - "Sprawdź czy zbierane są tylko niezbędne dane (minimalizacja)"
+      - "Szukaj domyślnych ustawień prywatności (np. profil publiczny vs prywatny)"
+      - "Sprawdź czy dane są pseudonimizowane/szyfrowane gdzie to możliwe"
+    remediation: "Zbieraj tylko dane niezbędne do realizacji celu. Domyślne ustawienia powinny być najbardziej prywatne. Rozważ pseudonimizację lub szyfrowanie danych osobowych."
+
+  - id: GDPR-08
+    area: "Rejestr czynności przetwarzania"
+    question: "Czy istnieje dokumentacja opisująca czynności przetwarzania danych (art. 30)?"
+    severity: MEDIUM
+    hints:
+      - "Szukaj dokumentacji przetwarzania danych (ROPA)"
+      - "Sprawdź czy README lub docs/ opisuje jakie dane są przetwarzane"
+    remediation: "Utwórz rejestr czynności przetwarzania dokumentujący: kategorie danych, cele przetwarzania, odbiorców, transfery do państw trzecich, planowane terminy usunięcia, środki bezpieczeństwa."
+
+  - id: GDPR-09
+    area: "Bezpieczeństwo przetwarzania"
+    question: "Czy dane osobowe są odpowiednio zabezpieczone (art. 32)?"
+    severity: CRITICAL
+    hints:
+      - "Sprawdź szyfrowanie danych w spoczynku i w tranzycie (HTTPS, encrypted DB)"
+      - "Szukaj haseł przechowywanych w plain text"
+      - "Sprawdź kontrolę dostępu do danych osobowych"
+      - "Szukaj logowania danych osobowych"
+    remediation: "Zapewnij: szyfrowanie danych w tranzycie (TLS/HTTPS), hashowanie haseł (bcrypt/argon2), kontrolę dostępu opartą na rolach, pseudonimizację gdzie to możliwe, regularne testy bezpieczeństwa."
+
+  - id: GDPR-10
+    area: "Zgłaszanie naruszeń"
+    question: "Czy istnieje mechanizm wykrywania i zgłaszania naruszeń ochrony danych (art. 33/34)?"
+    severity: MEDIUM
+    hints:
+      - "Szukaj mechanizmów alertowania o naruszeniach bezpieczeństwa"
+      - "Sprawdź logging i monitoring dostępu do danych"
+      - "Szukaj procedur incident response"
+    remediation: "Zaimplementuj logging dostępu do danych osobowych, monitoring anomalii, oraz procedurę zgłaszania naruszeń do organu nadzorczego w ciągu 72 godzin. Dodaj mechanizm powiadamiania użytkowników o naruszeniach wysokiego ryzyka."
+
+  - id: GDPR-11
+    area: "Ocena skutków (DPIA)"
+    question: "Czy dla przetwarzania wysokiego ryzyka przeprowadzono ocenę skutków dla ochrony danych (art. 35)?"
+    severity: HIGH
+    hints:
+      - "Szukaj przetwarzania na dużą skalę danych wrażliwych"
+      - "Szukaj profilowania lub automatycznego podejmowania decyzji"
+      - "Szukaj monitorowania systematycznego (tracking, analytics)"
+    remediation: "Jeśli przetwarzanie wiąże się z wysokim ryzykiem (profilowanie, dane wrażliwe na dużą skalę, monitoring systematyczny), przeprowadź DPIA dokumentującą: opis operacji, ocenę konieczności i proporcjonalności, ocenę ryzyka, środki zaradcze."
+
+  - id: GDPR-12
+    area: "Transfer danych poza EOG"
+    question: "Czy transfer danych osobowych poza EOG jest odpowiednio zabezpieczony (art. 44-49)?"
+    severity: HIGH
+    hints:
+      - "Szukaj integracji z usługami spoza EOG (AWS US, Google US, Stripe US)"
+      - "Sprawdź konfigurację regionów cloud (EU vs US)"
+      - "Szukaj CDN, analytics, payment providers zlokalizowanych poza EOG"
+    remediation: "Upewnij się, że transfery danych poza EOG mają odpowiednią podstawę prawną: decyzja o adekwatności, standardowe klauzule umowne (SCC), lub wiążące reguły korporacyjne (BCR). Preferuj hosting w regionach EU."
