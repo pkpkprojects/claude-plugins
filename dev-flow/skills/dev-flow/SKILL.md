@@ -261,6 +261,28 @@ Parse this plan and extract:
 - `UI_PHASES`: phases where "UI work required" is Yes
 - `PARALLEL_GROUPS`: groups of phases that can execute in parallel
 
+### Step 3.5b: Legal Plan Review (Conditional)
+
+**Entry condition:** `LEGAL_CONFIG` is not null AND the task is not tagged as `hotfix` or `refactor` AND `legal_review` is not explicitly set to `false` in the task/PRD.
+
+1. Dispatch a **new Task** (fresh subagent) for the legal-reviewer:
+
+   **Prompt must include ALL of the following inline:**
+   - **Role assignment**: "You are the legal-reviewer agent. Review the following implementation plan for legal compliance requirements. Use Mode 1: Plan Review."
+   - **The implementation plan**: Full plan text from Step 3.5.
+   - **Legal configuration**: Full `LEGAL_CONFIG` serialized as YAML (jurisdictions, sectors, extras, overrides).
+   - **Matching checklists**: Full content of all `LEGAL_CHECKLISTS`.
+   - **Project configuration**: `project.type`, `project.stack`, `project.name`.
+   - **Extra instructions**: The value of `agents.legal-reviewer.extra_instructions` from config.
+
+2. Receive legal reviewer output: a table of legal requirements with severity.
+
+3. If the legal reviewer identifies requirements:
+   - Append them as acceptance criteria to the relevant phases in `APPROVED_PLAN`.
+   - If requirements span all phases (e.g., "must have privacy policy"), create a dedicated phase or add to an existing cross-cutting phase.
+
+4. Log legal review results for PM report.
+
 ### Step 3.6: Present Plan to User for Approval
 
 Use `AskUserQuestion` to present the complete plan and ask:
