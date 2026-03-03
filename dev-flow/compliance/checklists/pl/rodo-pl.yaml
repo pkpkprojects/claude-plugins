@@ -1,0 +1,35 @@
+name: RODO-PL (Polish GDPR specifics)
+version: "2024.1"
+applies_when:
+  jurisdictions: [PL]
+severity_default: MEDIUM
+
+checks:
+  - id: RODOPL-01
+    area: "Język polski w klauzulach informacyjnych"
+    question: "Czy klauzule informacyjne i polityka prywatności są dostępne w języku polskim?"
+    severity: HIGH
+    hints:
+      - "Szukaj polityki prywatności — czy jest po polsku"
+      - "Szukaj klauzul informacyjnych przy formularzach"
+      - "Sprawdź czy zgody i regulaminy mają polską wersję językową"
+    remediation: "Zapewnij polską wersję językową: polityki prywatności, klauzul informacyjnych przy formularzach, regulaminu serwisu, informacji o cookies. Dla usług skierowanych do polskich użytkowników język polski jest obligatoryjny."
+
+  - id: RODOPL-02
+    area: "IOD (Inspektor Ochrony Danych) — dane kontaktowe"
+    question: "Czy dane kontaktowe Inspektora Ochrony Danych są publicznie dostępne (jeśli IOD jest wymagany)?"
+    severity: MEDIUM
+    hints:
+      - "Szukaj danych kontaktowych IOD/DPO w polityce prywatności"
+      - "Szukaj adresu email IOD (np. iod@, dpo@, rodo@)"
+      - "Sprawdź stronę kontaktową"
+    remediation: "Jeśli organizacja jest zobowiązana do wyznaczenia IOD (art. 37 RODO), opublikuj dane kontaktowe IOD w polityce prywatności i na stronie kontaktowej. Minimum: adres email IOD."
+
+  - id: RODOPL-03
+    area: "Zgłoszenie do UODO"
+    question: "Czy przetwarzanie danych zostało zgłoszone do Urzędu Ochrony Danych Osobowych (jeśli wymagane)?"
+    severity: MEDIUM
+    hints:
+      - "Szukaj dokumentacji o rejestracji w UODO"
+      - "Sprawdź czy przetwarzanie wymaga DPIA i konsultacji z UODO"
+    remediation: "Sprawdź czy przetwarzanie wymaga konsultacji z UODO (art. 36 RODO — gdy DPIA wskazuje na wysokie ryzyko). Jeśli wyznaczono IOD, jego dane należy zgłosić do UODO. To jest wymóg organizacyjny — udokumentuj status w dokumentacji projektu."

@@ -1,0 +1,47 @@
+name: Ustawa o świadczeniu usług drogą elektroniczną
+version: "2024.1"
+applies_when:
+  jurisdictions: [PL]
+  extras: [ecommerce]
+severity_default: HIGH
+
+checks:
+  - id: PLECOM-01
+    area: "Regulamin serwisu"
+    question: "Czy serwis posiada regulamin świadczenia usług drogą elektroniczną?"
+    severity: CRITICAL
+    hints:
+      - "Szukaj linku do regulaminu (Terms of Service, Regulamin)"
+      - "Sprawdź czy regulamin zawiera wymagane elementy prawne"
+      - "Szukaj akceptacji regulaminu przy rejestracji"
+    remediation: "Utwórz regulamin zawierający: rodzaj i zakres usług świadczonych drogą elektroniczną, warunki świadczenia usług (wymagania techniczne, zakaz treści bezprawnych), warunki zawierania i rozwiązywania umów, tryb postępowania reklamacyjnego."
+
+  - id: PLECOM-02
+    area: "Polityka prywatności"
+    question: "Czy serwis posiada politykę prywatności zgodną z RODO?"
+    severity: CRITICAL
+    hints:
+      - "Szukaj linku do polityki prywatności"
+      - "Sprawdź czy polityka prywatności jest łatwo dostępna (link w stopce)"
+      - "Szukaj wymaganych elementów: administrator, cel, podstawa, prawa"
+    remediation: "Opublikuj politykę prywatności zawierającą: dane administratora, cele i podstawy przetwarzania, kategorie danych, odbiorców danych, okres przechowywania, prawa osób (dostęp, sprostowanie, usunięcie, przenoszenie), informację o cookies. Link w stopce każdej strony."
+
+  - id: PLECOM-03
+    area: "Newsletter consent — double opt-in"
+    question: "Czy zapisywanie na newsletter wymaga double opt-in?"
+    severity: HIGH
+    hints:
+      - "Szukaj formularzy zapisu na newsletter"
+      - "Sprawdź czy po zapisie wysyłany jest email potwierdzający"
+      - "Szukaj mechanizmu weryfikacji adresu email"
+    remediation: "Zaimplementuj double opt-in dla newslettera: 1) Użytkownik podaje email i zaznacza zgodę, 2) System wysyła email z linkiem potwierdzającym, 3) Dopiero po kliknięciu linku adres jest aktywowany. Przechowuj dowód zgody (timestamp, IP, treść zgody)."
+
+  - id: PLECOM-04
+    area: "Dane podmiotu świadczącego usługi"
+    question: "Czy na stronie są dostępne pełne dane podmiotu świadczącego usługi elektroniczne?"
+    severity: HIGH
+    hints:
+      - "Szukaj danych firmy w stopce (nazwa, adres, NIP)"
+      - "Szukaj strony kontaktowej z pełnymi danymi"
+      - "Sprawdź czy podano adres email do kontaktu"
+    remediation: "Na stronie muszą być podane: pełna nazwa firmy, adres siedziby, adres email, NIP (jeśli przedsiębiorca). Informacje te powinny być łatwo i bezpośrednio dostępne — najlepiej w stopce i na stronie kontaktowej."

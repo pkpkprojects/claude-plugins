@@ -1,0 +1,57 @@
+name: Ustawa o prawach konsumenta
+version: "2024.1"
+applies_when:
+  jurisdictions: [PL]
+  extras: [ecommerce]
+severity_default: HIGH
+
+checks:
+  - id: PLCONS-01
+    area: "Prawo odstąpienia 14 dni"
+    question: "Czy konsument jest informowany o prawie odstąpienia od umowy w ciągu 14 dni?"
+    severity: CRITICAL
+    hints:
+      - "Szukaj informacji o prawie do zwrotu przy procesie zakupowym"
+      - "Szukaj wzoru formularza odstąpienia"
+      - "Sprawdź czy checkout zawiera informację o 14 dniach na zwrot"
+    remediation: "Przed złożeniem zamówienia poinformuj konsumenta o prawie odstąpienia od umowy w ciągu 14 dni bez podawania przyczyny. Udostępnij wzór formularza odstąpienia. Jeśli prawo odstąpienia nie przysługuje (np. treści cyfrowe po rozpoczęciu), wyraźnie o tym poinformuj."
+
+  - id: PLCONS-02
+    area: "Informacja o sprzedawcy"
+    question: "Czy na stronie są pełne dane identyfikujące sprzedawcę?"
+    severity: HIGH
+    hints:
+      - "Szukaj stopki z danymi firmy (NIP, REGON, adres)"
+      - "Szukaj strony 'O nas' lub 'Kontakt' z danymi rejestracyjnymi"
+      - "Sprawdź czy podano imię i nazwisko lub nazwę firmy, adres, NIP"
+    remediation: "Opublikuj na stronie: pełną nazwę firmy/imię i nazwisko, adres siedziby, NIP, REGON, numer KRS (jeśli dotyczy), dane kontaktowe (email, telefon). Dane powinny być łatwo dostępne (stopka lub dedykowana strona)."
+
+  - id: PLCONS-03
+    area: "Jasna informacja o cenie"
+    question: "Czy ceny są prezentowane w sposób jasny i zawierają wszystkie składniki?"
+    severity: HIGH
+    hints:
+      - "Szukaj cen produktów — czy zawierają VAT"
+      - "Sprawdź czy koszty dostawy są widoczne przed złożeniem zamówienia"
+      - "Szukaj ukrytych opłat dodawanych w procesie checkout"
+    remediation: "Prezentuj ceny brutto (z VAT). Przed złożeniem zamówienia pokaż: cenę produktu, koszty dostawy, wszystkie dodatkowe opłaty. Łączna kwota musi być widoczna przed potwierdzeniem zamówienia."
+
+  - id: PLCONS-04
+    area: "Potwierdzenie zamówienia"
+    question: "Czy konsument otrzymuje potwierdzenie zamówienia na trwałym nośniku?"
+    severity: MEDIUM
+    hints:
+      - "Szukaj emaili potwierdzenia zamówienia"
+      - "Sprawdź czy potwierdzenie zawiera szczegóły zamówienia"
+      - "Szukaj szablonów emaili transakcyjnych"
+    remediation: "Po złożeniu zamówienia wyślij potwierdzenie na trwałym nośniku (email) zawierające: opis zamówienia, cenę łączną, dane sprzedawcy, informację o prawie odstąpienia, przewidywany termin dostawy."
+
+  - id: PLCONS-05
+    area: "Reklamacje i gwarancja"
+    question: "Czy konsument ma dostęp do procedury reklamacyjnej?"
+    severity: HIGH
+    hints:
+      - "Szukaj informacji o reklamacjach i zwrotach"
+      - "Szukaj formularza reklamacyjnego"
+      - "Sprawdź regulamin pod kątem procedury reklamacyjnej"
+    remediation: "Zapewnij: jasną procedurę reklamacyjną (formularz lub instrukcja), informację o rękojmi (2 lata), informację o gwarancji producenta (jeśli dotyczy), termin rozpatrzenia reklamacji (14 dni). Dodaj sekcję 'Reklamacje i zwroty' do regulaminu."
