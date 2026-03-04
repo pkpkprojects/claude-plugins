@@ -19,16 +19,34 @@ dev-flow manages the entire development cycle through specialized agents:
 ## Pipeline
 
 ```
-INPUT (PRD/task) -> PLANNING -> [DESIGN SYSTEM] -> IMPLEMENTATION LOOP -> PM REPORT
+INPUT (PRD/task)
+  -> PLANNING (Architect + Legal Plan Review)
+  -> [DESIGN SYSTEM]
+  -> IMPLEMENTATION LOOP (per phase: TDD -> Security -> Legal -> Acceptance)
+  -> PM REPORT
 ```
 
-1. **Planning** -- Architect analyzes, challenges, discusses with you, creates phased plan
+1. **Planning** -- Architect analyzes, challenges, discusses with you, creates phased plan. Legal reviewer checks plan for compliance requirements.
 2. **Design System** -- (optional) UX Designer creates components + personas before implementation
-3. **Implementation Loop** -- Per phase: implement (TDD) -> security review -> legal review -> acceptance review
+3. **Implementation Loop** -- Per phase: implement (TDD) -> security review -> legal compliance review -> acceptance review
 4. **Feedback Loop** -- Failed reviews -> implementer fixes -> re-review (max 3 iterations)
-5. **PM Report** -- Final verification: tests, lint, security, acceptance, summary
+5. **PM Report** -- Final verification: tests, lint, security, legal compliance, acceptance, summary
+
+Legal review is automatically skipped for hotfixes and refactors, or when `legal_review: false` is set in the task.
 
 ## Installation
+
+Add the private marketplace and install:
+
+```bash
+# Add marketplace
+claude plugins marketplace add git@github.com:pkpkprojects/claude-plugins.git
+
+# Install plugin
+claude plugins install dev-flow
+```
+
+Or install directly from local path:
 
 ```bash
 claude --plugin-dir dev-flow/
