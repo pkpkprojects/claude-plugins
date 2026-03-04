@@ -1,0 +1,23 @@
+{
+  "name": "pkpk-plugins",
+  "owner": {
+    "name": "pkpk_projects",
+    "email": "dev@pkpkprojects.com"
+  },
+  "metadata": {
+    "description": "Private plugin marketplace for pkpk_projects"
+  },
+  "plugins": [
+    {
+      "name": "dev-flow",
+      "source": "./dev-flow",
+      "description": "Full development workflow orchestrator - from PRD to committed, reviewed code. Includes architect, UX designer, implementer, security reviewer, acceptance gate, legal reviewer, and PM oversight.",
+      "version": "1.0.0",
+      "author": {
+        "name": "pkpk_projects",
+        "email": "dev@pkpkprojects.com"
+      },
+      "category": "development"
+    }
+  ]
+}
