@@ -12,6 +12,7 @@ dev-flow manages the entire development cycle through specialized agents:
 | **UX Designer** | opus | Design-system-first approach, personas, consistency enforcement |
 | **Implementer** | sonnet | Strict TDD (RED-GREEN-REFACTOR), uses design system components |
 | **Security Reviewer** | sonnet | Context-aware review adapted to project type (CLI/web/API/mobile) |
+| **Legal Reviewer** | sonnet | Legal compliance review — checklists + own reasoning, configurable per jurisdiction |
 | **Acceptance Reviewer** | sonnet | Configurable quality gate with checks from `checks.yaml` |
 | **PM** | haiku | Autonomous oversight, stall detection, final verification report |
 
@@ -23,7 +24,7 @@ INPUT (PRD/task) -> PLANNING -> [DESIGN SYSTEM] -> IMPLEMENTATION LOOP -> PM REP
 
 1. **Planning** -- Architect analyzes, challenges, discusses with you, creates phased plan
 2. **Design System** -- (optional) UX Designer creates components + personas before implementation
-3. **Implementation Loop** -- Per phase: implement (TDD) -> security review -> acceptance review
+3. **Implementation Loop** -- Per phase: implement (TDD) -> security review -> legal review -> acceptance review
 4. **Feedback Loop** -- Failed reviews -> implementer fixes -> re-review (max 3 iterations)
 5. **PM Report** -- Final verification: tests, lint, security, acceptance, summary
 
@@ -77,6 +78,18 @@ agents:
   implementer:
     model: "sonnet"
     extra_instructions: "Use testify for tests."
+
+# Legal compliance (optional)
+legal:
+  jurisdictions: [PL, EU]
+  sectors: []           # medical, financial
+  extras: []            # ecommerce, ai, platform
+  overrides:
+    - check: GDPR-02
+      status: ACKNOWLEDGED
+      reason: "Consent withdrawal requires account deletion — intentional design"
+      decided_by: "developer"
+      decided_at: "2026-03-01"
 ```
 
 ### `review/checks.yaml` -- Quality gate checks
@@ -148,7 +161,7 @@ dev-flow/
 ├── .claude-plugin/
 │   ├── plugin.json              # Plugin manifest
 │   └── marketplace.json         # Future publication
-├── agents/                      # 6 specialized agent definitions
+├── agents/                      # 7 specialized agent definitions
 ├── commands/
 │   ├── dev-flow.md              # /dev-flow - main entry point
 │   └── init.md                  # /dev-flow:init - config initialization
@@ -158,6 +171,12 @@ dev-flow/
 ├── hooks/
 │   ├── hooks.json               # Session start hook
 │   └── session-start.sh         # Config validation
+├── compliance/
+│   ├── checklists/              # Legal compliance checklists
+│   │   ├── eu/                  # GDPR, ePrivacy, EAA, AI Act, DSA
+│   │   ├── pl/                  # RODO-PL, consumer rights, e-commerce
+│   │   └── sectors/             # Medical, financial
+│   └── templates/               # Privacy policy, ToS templates
 ├── templates/pipeline-config/   # Per-stack config templates
 └── test/evals/                  # Evaluation scenarios
 ```
