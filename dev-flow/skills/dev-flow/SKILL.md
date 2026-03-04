@@ -63,14 +63,16 @@ During input parsing, scan `TASK_TEXT` for a `legal_review: false` directive. If
 
 ### Step 1.4: Permission Warmup
 
-Run these Bash commands in parallel to collect all required permissions upfront:
+The session-start hook pre-creates runtime directories and cleans up stale watchdog files from previous sessions.
+
+Run these Bash commands in parallel to collect all required permissions upfront. Each command establishes a permission pattern — subsequent calls matching that pattern are auto-approved:
 
 ```bash
 git status                                          # Git operations
 ls .claude/dev-flow/ 2>/dev/null || true            # File listing
-mkdir -p .claude/dev-flow/reviews                   # Directory creation
 date +%s                                            # Timestamps (watchdog)
-rm -f .claude/dev-flow/.watchdog-test 2>/dev/null || true  # Cleanup operations
+echo "warmup" > .claude/dev-flow/.watchdog-test && rm -f .claude/dev-flow/.watchdog-test  # Watchdog write+cleanup
+cat .claude/dev-flow/.watchdog-test 2>/dev/null || true  # Watchdog read
 ```
 
 If any category is denied, note the limitation and proceed where possible.

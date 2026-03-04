@@ -21,4 +21,12 @@ if ! grep -q '^version:' "$CONFIG_FILE" 2>/dev/null; then
   echo "[dev-flow] Warning: $CONFIG_FILE is missing the 'version' field. Run /dev-flow:init to regenerate." >&2
 fi
 
+# Pre-create runtime directories so agents don't trigger permission prompts.
+# These are .gitignore'd -- only config files are tracked.
+mkdir -p .claude/dev-flow/reviews
+mkdir -p .claude/dev-flow/review
+
+# Clean up stale watchdog files from previous sessions.
+rm -f .claude/dev-flow/.watchdog-* 2>/dev/null || true
+
 exit 0

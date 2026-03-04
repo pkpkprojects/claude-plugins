@@ -91,7 +91,9 @@ Store the resolved configuration as `CONFIG` for use throughout the pipeline.
 
 ### 0.4 Permission Warmup (MANDATORY)
 
-The pipeline requires multiple Bash commands throughout execution. To avoid repeated permission prompts mid-pipeline, run ALL of the following commands upfront in a **single parallel batch**. The user approves each category once, and subsequent calls are auto-approved.
+The session-start hook pre-creates runtime directories (`.claude/dev-flow/reviews/`) and cleans up stale watchdog files from previous sessions — no permission prompts for those.
+
+The pipeline still requires Bash commands throughout execution (git, watchdog timestamps, file ops). To avoid repeated permission prompts mid-pipeline, run ALL of the following commands upfront in a **single parallel batch**. The user approves each category once, and subsequent calls with matching patterns are auto-approved.
 
 ```bash
 # Git operations (used throughout Phase 3: commits, diffs, logs)
@@ -100,13 +102,16 @@ git status
 # File operations (review files, watchdog timestamps)
 ls .claude/dev-flow/ 2>/dev/null || true
 
-# Directory creation (review output directory)
-mkdir -p .claude/dev-flow/reviews
-
 # Timestamp operations (watchdog health monitor)
 date +%s
 
-# Cleanup operations (watchdog files, pipeline artifacts)
+# Watchdog file write (creates permission pattern for echo > .claude/dev-flow/.watchdog-*)
+echo "warmup" > .claude/dev-flow/.watchdog-test && rm -f .claude/dev-flow/.watchdog-test
+
+# Watchdog file read (creates permission pattern for cat .claude/dev-flow/.watchdog-*)
+cat .claude/dev-flow/.watchdog-test 2>/dev/null || true
+
+# Watchdog cleanup (creates permission pattern for rm -f .claude/dev-flow/.watchdog-*)
 rm -f .claude/dev-flow/.watchdog-test 2>/dev/null || true
 ```
 
