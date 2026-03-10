@@ -217,6 +217,13 @@ Phase 1 is a **conversation between architect and security reviewer** to produce
 
 ### 1.3 Iterate Until Agreement
 
+**Variable tracking:**
+- `ARCHITECT_PLAN` = always the latest version of the architect's plan (updated after each architect dispatch)
+- `SECURITY_REVIEW` = the latest security review output (internal, not for user)
+- `LEGAL_REVIEW` = the latest legal review output (internal, not for user)
+
+When presenting to the user, ALWAYS use `ARCHITECT_PLAN`, never `SECURITY_REVIEW` or `LEGAL_REVIEW`.
+
 If the security reviewer returns **NEEDS REVISION**:
 
 1. **Extract the feedback** (findings + recommendations)
@@ -225,14 +232,49 @@ If the security reviewer returns **NEEDS REVISION**:
    - Previous draft plan
    - Security reviewer feedback
    - Instruction: "Revise the plan to address the security concerns above."
-3. **Repeat 1.2 (security review)** on the revised plan
-4. **Maximum 3 iterations.** After 3 rounds without agreement, escalate to user with both viewpoints.
+3. **Store the revised plan as `ARCHITECT_PLAN`.**
+4. **Repeat 1.2 (security review)** on the revised plan
+5. **Maximum 3 iterations.** After 3 rounds without agreement, escalate to user with both viewpoints.
 
 If the security reviewer returns **PASS**:
 
-1. **Present the plan to the user** (both architect's plan and security reviewer's approval)
-2. **User approves or requests changes**
-3. Store the approved plan as `PLAN`.
+1. **Store the architect's latest plan** as `ARCHITECT_PLAN` (this is the version that passed security review).
+2. **[If legal review enabled]** Run legal review on `ARCHITECT_PLAN` (see Step 1.4 below). If the legal reviewer identifies requirements, feed them back to the architect for a final revision. Store the result as `ARCHITECT_PLAN`.
+3. **Present `ARCHITECT_PLAN` to the user.** This is the PRIMARY output. Format:
+
+   ```
+   The architect has produced the following implementation plan:
+
+   [Full ARCHITECT_PLAN text]
+
+   ---
+   Internal reviews passed:
+   - Security review: PASS ✓ [If iterations > 1: "Addressed N security concerns during planning."]
+   - Legal review: PASS ✓ [If applicable. If requirements were added: "N legal requirements integrated as acceptance criteria."]
+   ```
+
+4. **Do NOT present the full security or legal review reports to the user.** They are internal quality gates. Only show the status line above. If the user asks for details, THEN provide the full review.
+5. **User approves or requests changes** to the ARCHITECT'S plan.
+6. Store the approved plan as `PLAN`.
+
+### 1.4 Legal Plan Review (Conditional)
+
+**Entry condition:** Legal review is enabled in CONFIG AND the task is not tagged as `hotfix` or `refactor`.
+
+1. **Dispatch a legal-reviewer agent** with:
+   - The `ARCHITECT_PLAN` (full text)
+   - Legal configuration from CONFIG (jurisdictions, sectors, extras, overrides)
+   - Matching legal checklists
+   - Project configuration (type, stack, name)
+   - Instruction: "Review this implementation plan for legal compliance requirements. Use Mode 1: Plan Review."
+
+2. **Receive legal reviewer output**: a table of legal requirements with severity.
+
+3. **If the legal reviewer identifies requirements:**
+   - Feed the requirements back to the architect for integration as acceptance criteria.
+   - Store the architect's revised plan as `ARCHITECT_PLAN`.
+
+4. **Log legal review results for PM report.**
 
 ### Plan structure expected from architect
 

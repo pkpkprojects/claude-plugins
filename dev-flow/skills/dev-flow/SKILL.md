@@ -263,6 +263,15 @@ The architect returns a plan in the standard format with:
 - Phase Dependency Graph
 - Estimated Total Complexity
 
+**Store this as `ARCHITECT_PLAN`** — always the latest version of the architect's plan.
+
+**Variable tracking (maintained throughout Phase 3):**
+- `ARCHITECT_PLAN` = always the latest version of the architect's plan (updated after each architect dispatch)
+- `SECURITY_REVIEW` = the latest security review output (internal, not for user)
+- `LEGAL_REVIEW` = the latest legal review output (internal, not for user)
+
+When presenting to the user, ALWAYS use `ARCHITECT_PLAN`, never `SECURITY_REVIEW` or `LEGAL_REVIEW`.
+
 Parse this plan and extract:
 - `PHASES`: ordered list of phases
 - `DEPENDENCY_GRAPH`: which phases depend on which
@@ -294,25 +303,36 @@ Parse this plan and extract:
 2. Receive legal reviewer output: a table of legal requirements with severity.
 
 3. If the legal reviewer identifies requirements:
-   - Append them as acceptance criteria to the relevant phases in `APPROVED_PLAN`.
-   - If requirements span all phases (e.g., "must have privacy policy"), create a dedicated phase or add to an existing cross-cutting phase.
+   - Feed the requirements back to the architect agent for integration as acceptance criteria in the relevant phases.
+   - If requirements span all phases (e.g., "must have privacy policy"), instruct the architect to create a dedicated phase or add to an existing cross-cutting phase.
+   - **Store the architect's revised plan as `ARCHITECT_PLAN`.**
+   - Store the legal review output as `LEGAL_REVIEW` (internal only).
 
 4. Log legal review results for PM report.
 
 ### Step 3.6: Present Plan to User for Approval
 
-Use `AskUserQuestion` to present the complete plan and ask:
+**IMPORTANT:** Present the ARCHITECT'S PLAN (`ARCHITECT_PLAN`) as the primary content. Security and legal reviews are internal quality gates — their full reports should NOT be shown to the user. Only include a brief status line.
+
+Use `AskUserQuestion` to present:
 
 ```
 The architect has produced the following implementation plan:
 
-[Full plan text]
+[Full ARCHITECT_PLAN text — the architect's latest version with any legal requirements integrated]
+
+---
+Internal reviews passed:
+- Security review: PASS ✓ [If iterations occurred: "Addressed N security concerns during planning."]
+- Legal compliance: PASS ✓ [If applicable. If requirements were added: "N legal requirements integrated as acceptance criteria."]
 
 Do you approve this plan? You can:
 1. Approve as-is
 2. Request changes (describe what you want modified)
 3. Reject and start over
 ```
+
+**If the user asks for the full security or legal review report**, THEN provide it from `SECURITY_REVIEW` or `LEGAL_REVIEW`. Otherwise, do not show it.
 
 ### Step 3.7: Handle User Response
 
