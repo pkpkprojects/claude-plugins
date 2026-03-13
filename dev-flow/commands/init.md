@@ -135,9 +135,35 @@ Set to `true` if ANY of the following are found:
 
 Set to `true` if ANY of the following are found:
 
-- `Glob` matches: `design-system/`, `src/design-system/`, `packages/design-system/`, `storybook/`, `.storybook/`
+- `Glob` matches: `design-system/`, `src/design-system/`, `packages/design-system/`
 - Files: `design-system/index.html`, `design-system/components/`
 - If true, set `design_system_path` to the detected path (e.g., `design-system/`, `src/design-system/`, `packages/design-system/`)
+
+**NOTE:** Do NOT include `storybook/` or `.storybook/` in this check. Storybook is detected separately below.
+
+### 3.3b Storybook Detection (`has_storybook`)
+
+Set to `true` if ANY of the following are found:
+
+- `Glob` matches: `.storybook/` directory
+- `Grep` for `@storybook/` in `package.json` dependencies or devDependencies
+- If found: set `has_storybook: true`, `storybook_config_path` to the detected config path (e.g., `.storybook/`)
+
+### 3.3c Components Path Detection (`components_path`)
+
+Detect where the project keeps its UI components:
+
+- `Glob` for: `src/components/`, `components/`, `src/ui/`, `app/components/`
+- Use the first match
+- If none found, leave as empty string (will be determined by the UX Designer agent)
+
+### 3.3d Priority Logic
+
+When both Storybook and design-system are detected, the pipeline uses **Storybook mode** for the UX Designer:
+
+- If `has_storybook: true` → UX Designer uses Storybook mode (components in source tree, stories)
+- Else if `has_design_system: true` → UX Designer uses design-system mode (current behavior)
+- Else → UX Designer creates design-system from scratch (current behavior)
 
 ### 3.4 Testing Framework Detection
 
@@ -189,6 +215,9 @@ Use the following template. Replace placeholders with detected values:
 | `has_i18n: false` | Detected i18n presence (true/false) |
 | `has_design_system: false` | Detected design system presence (true/false) |
 | `design_system_path` | Detected design system path or default `"design-system/"` |
+| `has_storybook: false` | Detected Storybook presence (true/false) |
+| `storybook_config_path` | Detected Storybook config path (e.g., `".storybook/"`) or empty |
+| `components_path` | Detected components directory (e.g., `"src/components/"`) or empty |
 
 Here is the complete config.yaml template -- copy it, fill in detected values, and write it:
 
@@ -203,6 +232,9 @@ project:
   has_i18n: false
   has_design_system: false
   design_system_path: "design-system/"
+  has_storybook: false
+  storybook_config_path: ""
+  components_path: ""
 
 agents:
   architect:
@@ -306,7 +338,7 @@ Based on the detected stack, populate `extra_instructions` for each agent. Use t
   ```
 - **ux-designer:**
   ```
-  design-system/ is source of truth. Design tokens for colors/spacing/typography. WCAG 2.1 AA. Loading/error/empty states everywhere. Mobile-first responsive. Animations via CSS transitions or Framer Motion.
+  Design tokens for colors/spacing/typography. WCAG 2.1 AA. Loading/error/empty states everywhere. Mobile-first responsive. Animations via CSS transitions or Framer Motion. If Storybook detected: components in source tree with stories, no design-system/ directory. Otherwise: design-system/ is source of truth.
   ```
 - **implementer:**
   ```
@@ -329,7 +361,7 @@ Based on the detected stack, populate `extra_instructions` for each agent. Use t
   ```
 - **ux-designer:**
   ```
-  design-system/ is source of truth. CSS custom properties for tokens. WCAG 2.1 AA. Loading/error/empty states. Mobile-first. Vue <Transition>/<TransitionGroup> for state changes.
+  CSS custom properties for tokens. WCAG 2.1 AA. Loading/error/empty states. Mobile-first. Vue <Transition>/<TransitionGroup> for state changes. If Storybook detected: components in source tree with stories, no design-system/ directory. Otherwise: design-system/ is source of truth.
   ```
 - **implementer:**
   ```
@@ -467,11 +499,11 @@ optional:
       - "Translation keys in all locale files"
 
   - id: design_system_compliance
-    name: "Design system compliance"
+    name: "Component library compliance"
     run: false
     rules:
-      - "New UI components first in design-system/"
-      - "Code uses design-system components, not custom ones"
+      - "New UI components have story files (if Storybook) or exist in design-system/"
+      - "Code reuses existing components, not custom ones"
       - "Consistent notification/alert/modal patterns"
 
   - id: scalability
@@ -498,8 +530,8 @@ Enable/disable optional checks based on detection:
 |---|---|
 | `db_migrations` | `has_db` is true |
 | `i18n` | `has_i18n` is true |
-| `design_system_compliance` | `has_design_system` is true |
-| `personas_compliance` | `has_design_system` is true (personas typically accompany design systems) |
+| `design_system_compliance` | `has_design_system` is true OR `has_storybook` is true |
+| `personas_compliance` | `has_design_system` is true OR `has_storybook` is true (personas typically accompany design systems) |
 | `scalability` | `project.type` is `web-api` or `web-app` |
 
 ### 4.2.1 Stack-Specific Checks and Rule Customizations
@@ -801,6 +833,8 @@ Display a clear summary of what was detected and generated:
 - **Database:** [yes/no - what was detected]
 - **i18n:** [yes/no - what was detected]
 - **Design System:** [yes/no - where]
+- **Storybook:** [yes/no - config path if detected]
+- **Components Path:** [detected path or "not detected"]
 - **Legal Compliance:** [enabled/disabled - jurisdictions and sectors if enabled]
 
 ### Files Created

@@ -93,12 +93,16 @@ optional:
       - "Translation keys in all locale files"
 
   - id: design_system_compliance
-    name: "Design system compliance"
+    name: "Component library compliance"
     run: false
     rules:
-      - "New UI components first in design-system/"
-      - "Code uses design-system components, not custom ones"
+      # When Storybook (has_storybook: true): reviewer applies these rules
+      - "New UI components have story files (.stories.tsx)"
+      - "Code reuses existing components, not custom ones"
       - "Consistent notification/alert/modal patterns"
+      # When no Storybook: reviewer applies design-system/ rules instead
+      # - "New UI components first in design-system/"
+      # - "Code uses design-system components, not custom ones"
 
   - id: scalability
     name: "Scalability"

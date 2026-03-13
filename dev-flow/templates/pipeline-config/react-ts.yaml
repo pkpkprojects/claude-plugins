@@ -20,6 +20,9 @@ project:
   has_i18n: false                # Set true if using react-intl, i18next, etc.
   has_design_system: true        # Shared component library assumed
   design_system_path: "design-system/"
+  has_storybook: false           # Detected at init time
+  storybook_config_path: ""      # e.g. ".storybook/"
+  components_path: "src/components/"
 
 # ---------------------------------------------------------------------------
 # Agent configuration
@@ -183,13 +186,15 @@ optional:
       - "Pluralization handled correctly"
 
   - id: design_system_compliance
-    name: "Design system compliance"
+    name: "Component library compliance"
     run: true                    # Enabled by default for React projects
     rules:
-      - "New UI primitives created in design-system/ first"
-      - "Feature code imports from design-system, not re-implements"
+      # When Storybook is detected (has_storybook: true):
+      - "New UI components have .stories.tsx files"
+      - "Code reuses existing components from components_path, not custom inline versions"
       - "Consistent notification/alert/modal patterns"
       - "Design tokens used for colors, spacing, typography (no magic values)"
+      # When no Storybook (has_storybook: false), reviewer uses design-system/ rules instead
 
   - id: scalability
     name: "Scalability"

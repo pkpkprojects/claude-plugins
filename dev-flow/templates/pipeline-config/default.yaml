@@ -43,6 +43,15 @@ project:
   # Path to the design system relative to project root (only when has_design_system is true)
   design_system_path: "design-system/"
 
+  # Does the project use Storybook for component development/documentation?
+  has_storybook: false
+
+  # Path to Storybook config directory (e.g. ".storybook/")
+  storybook_config_path: ""
+
+  # Path to the project's component directory (e.g. "src/components/")
+  components_path: ""
+
 # ---------------------------------------------------------------------------
 # Agent configuration
 # ---------------------------------------------------------------------------

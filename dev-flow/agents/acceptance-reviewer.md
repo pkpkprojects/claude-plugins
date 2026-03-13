@@ -154,10 +154,20 @@ Search for:
 - Tests are in the expected directory structure
 - No test logic in production code files
 
-### Step 5: Verify Design System Compliance
+### Step 5: Verify Component Library Compliance
 
 When the `design_system_compliance` check is active:
 
+**If Storybook is detected** (`has_storybook: true` in config):
+1. **Story file coverage:** New UI components MUST have `.stories.tsx` files alongside them
+2. **Component reuse:** Implementation imports from `{components_path}/`, not custom inline components
+3. **Pattern consistency:**
+   - Search for multiple notification patterns (there should be only one)
+   - Search for multiple modal patterns (there should be only one)
+   - Search for multiple alert/toast patterns (there should be only one)
+4. **Story quality:** Stories cover key variants and states (default, hover, disabled, loading, error where applicable)
+
+**If design-system/ exists (no Storybook):**
 1. **Component existence:** For any new UI element in the implementation, check if a corresponding component exists in `design-system/components/`
 2. **Component usage:** Verify that implementation code actually imports/uses the design-system components, not custom versions
 3. **Pattern consistency:**
@@ -171,7 +181,7 @@ When the `design_system_compliance` check is active:
 
 When the `personas_compliance` check is active:
 
-1. Read persona files from `design-system/personas/`
+1. Read persona files from `design-system/personas/` or `docs/personas/` (check both locations)
 2. Identify user-facing text in the code changes:
    - Error messages
    - Success messages
