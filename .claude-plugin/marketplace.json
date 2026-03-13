@@ -12,7 +12,7 @@
       "name": "dev-flow",
       "source": "./dev-flow",
       "description": "Full development workflow orchestrator - from PRD to committed, reviewed code. Includes architect, UX designer, implementer, security reviewer, acceptance gate, legal reviewer, and PM oversight.",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "author": {
         "name": "pkpk_projects",
         "email": "dev@pkpkprojects.com"
