@@ -203,7 +203,7 @@ Compliance findings can be acknowledged with documented overrides in `config.yam
 
 ## Integration with Superpowers
 
-dev-flow integrates with the [superpowers](https://github.com/pkpkprojects/claude-plugins) plugin ecosystem:
+dev-flow integrates with the [superpowers](https://github.com/obra/superpowers) plugin ecosystem:
 
 | Skill | Used In |
 |-------|---------|
