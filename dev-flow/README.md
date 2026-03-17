@@ -1,74 +1,98 @@
 # dev-flow
 
-Full development workflow orchestrator for Claude Code -- from PRD to committed, reviewed code.
+**Full development workflow orchestrator for Claude Code** -- from PRD to committed, reviewed code.
 
-## What it does
+dev-flow is a Claude Code plugin that manages the entire software development lifecycle through a team of 7 specialized AI agents. Give it a task description or PRD, and it will plan, design, implement, review, and deliver production-ready code -- all following TDD, security best practices, and legal compliance.
 
-dev-flow manages the entire development cycle through specialized agents:
-
-| Agent | Model | Role |
-|-------|-------|------|
-| **Architect** | opus | Challenges requirements, proposes trade-offs, creates bite-sized plans |
-| **UX Designer** | opus | Design-system-first approach, personas, consistency enforcement |
-| **Implementer** | sonnet | Strict TDD (RED-GREEN-REFACTOR), uses design system components |
-| **Security Reviewer** | sonnet | Context-aware review adapted to project type (CLI/web/API/mobile) |
-| **Legal Reviewer** | sonnet | Legal compliance review — checklists + own reasoning, configurable per jurisdiction |
-| **Acceptance Reviewer** | sonnet | Configurable quality gate with checks from `checks.yaml` |
-| **PM** | haiku | Autonomous oversight, stall detection, final verification report |
-
-## Pipeline
+## How It Works
 
 ```
-INPUT (PRD/task)
-  -> PLANNING (Architect + Legal Plan Review)
-  -> [DESIGN SYSTEM]
-  -> IMPLEMENTATION LOOP (per phase: TDD -> Security -> Legal -> Acceptance)
-  -> PM REPORT
+                          ┌─────────────────┐
+                          │   INPUT          │
+                          │  PRD / task      │
+                          └────────┬────────┘
+                                   │
+                    ┌──────────────▼──────────────┐
+                    │     PHASE 1: PLANNING        │
+                    │  Architect ←→ Security Review │
+                    │  + Legal Plan Review          │
+                    └──────────────┬───────────────┘
+                                   │
+                    ┌──────────────▼──────────────┐
+                    │  PHASE 2: DESIGN (optional)  │
+                    │  UX Designer: design system,  │
+                    │  personas, components          │
+                    └──────────────┬───────────────┘
+                                   │
+              ┌────────────────────▼────────────────────┐
+              │       PHASE 3: IMPLEMENTATION LOOP       │
+              │                                          │
+              │  ┌──────────┐  ┌──────────┐  ┌────────┐ │
+              │  │Implementer│→│ Security │→│  Legal  │ │
+              │  │   (TDD)   │ │ Reviewer │ │Reviewer │ │
+              │  └──────────┘  └──────────┘  └────┬───┘ │
+              │                                    │     │
+              │  ┌──────────┐  ┌──────────────┐    │     │
+              │  │Acceptance│←─│ Feedback Loop │←───┘     │
+              │  │ Reviewer │  │ (max 3 iter.) │          │
+              │  └──────────┘  └──────────────┘          │
+              └────────────────────┬────────────────────┘
+                                   │
+                    ┌──────────────▼──────────────┐
+                    │       PM REPORT              │
+                    │  Tests, lint, security,      │
+                    │  legal, acceptance summary    │
+                    └─────────────────────────────┘
 ```
 
-1. **Planning** -- Architect analyzes, challenges, discusses with you, creates phased plan. Legal reviewer checks plan for compliance requirements.
-2. **Design System** -- (optional) UX Designer creates components + personas before implementation
-3. **Implementation Loop** -- Per phase: implement (TDD) -> security review -> legal compliance review -> acceptance review
-4. **Feedback Loop** -- Failed reviews -> implementer fixes -> re-review (max 3 iterations)
-5. **PM Report** -- Final verification: tests, lint, security, legal compliance, acceptance, summary
+## Agents
 
-Legal review is automatically skipped for hotfixes and refactors, or when `legal_review: false` is set in the task.
+| Agent | Model | Responsibility |
+|-------|-------|----------------|
+| **Architect** | Opus | Challenges requirements, proposes trade-offs, creates phased implementation plans. Available as consultant during implementation. |
+| **UX Designer** | Opus | Design-system-first approach with persona-driven design. Supports both standalone design systems and Storybook mode. |
+| **Implementer** | Sonnet | Strict TDD (RED-GREEN-REFACTOR). Builds features using design system components. |
+| **Security Reviewer** | Sonnet | Context-aware OWASP Top 10 review adapted to project type (CLI / web / API / mobile). |
+| **Legal Reviewer** | Sonnet | Hybrid compliance review (deterministic checklists + reasoning). Configurable per jurisdiction and sector. |
+| **Acceptance Reviewer** | Sonnet | Configurable quality gate driven by `checks.yaml`. Verifies tests, code quality, and design system compliance. |
+| **PM** | Haiku | Autonomous oversight -- detects stalls, suggests new checks, produces final verification report. |
 
 ## Installation
 
-Add the private marketplace and install:
+**From the private marketplace:**
 
 ```bash
-# Add marketplace
 claude plugins marketplace add git@github.com:pkpkprojects/claude-plugins.git
-
-# Install plugin
 claude plugins install dev-flow
 ```
 
-Or install directly from local path:
+**From a local directory:**
 
 ```bash
 claude --plugin-dir dev-flow/
 ```
 
-## Usage
+## Quick Start
 
-### Initialize project configuration
+### 1. Initialize your project
 
 ```
 /dev-flow:init
 ```
 
-Analyzes your project (detects stack, DB, i18n, design system) and generates `.claude/dev-flow/config.yaml` + `review/checks.yaml`.
+This auto-detects your tech stack, database, i18n, design system, and Storybook setup, then generates:
+- `.claude/dev-flow/config.yaml` -- project & agent configuration
+- `.claude/dev-flow/review/checks.yaml` -- quality gate checks
 
-### Run the pipeline
+### 2. Run the pipeline
+
+With an inline task:
 
 ```
 /dev-flow Add a user registration endpoint with email verification
 ```
 
-Or with a PRD file:
+With a PRD file:
 
 ```
 /dev-flow docs/prd/user-registration.md
@@ -76,9 +100,9 @@ Or with a PRD file:
 
 ## Configuration
 
-Generated by `/dev-flow:init` in `.claude/dev-flow/`:
+All configuration lives in `.claude/dev-flow/` and is generated by `/dev-flow:init`.
 
-### `config.yaml` -- Project & agent settings
+### `config.yaml` -- Project & Agent Settings
 
 ```yaml
 version: "1.0"
@@ -100,23 +124,20 @@ agents:
 # Legal compliance (optional)
 legal:
   jurisdictions: [PL, EU]
-  sectors: []           # medical, financial
-  extras: []            # ecommerce, ai, platform
+  sectors: []               # medical, financial
+  extras: []                # ecommerce, ai, platform
   overrides:
     - check: GDPR-02
       status: ACKNOWLEDGED
-      reason: "Consent withdrawal requires account deletion — intentional design"
-      decided_by: "developer"
-      decided_at: "2026-03-01"
+      reason: "Consent withdrawal requires account deletion -- intentional design"
 ```
 
-### `review/checks.yaml` -- Quality gate checks
+### `review/checks.yaml` -- Quality Gate
 
 ```yaml
 version: "1.0"
 standard:
   - id: tests_pass
-    name: "Tests pass"
     run: true
     command: "go test ./..."
 security:
@@ -128,76 +149,111 @@ optional:
     run: false
 ```
 
+Checks are categorized as **standard** (always run), **security** (always run), and **optional** (enabled based on project features). The acceptance reviewer evaluates all enabled checks and produces a structured PASS/FAIL report.
+
+## Supported Stacks
+
+`/dev-flow:init` ships with pre-built templates and stack-specific agent instructions for:
+
+| Stack | Test Command | Lint Command |
+|-------|-------------|-------------|
+| Symfony / PHP | `php bin/phpunit` | `vendor/bin/phpstan analyse` |
+| Go | `go test -race ./...` | `golangci-lint run` |
+| React + TypeScript | `npm test` | `npx eslint .` |
+| Vue + TypeScript | `npx vitest run` | `npx eslint .` |
+| Flutter / Dart | `flutter test` | `flutter analyze` |
+
+Each template configures stack-specific security checks, testing conventions, and agent instructions automatically.
+
 ## Monorepo Support
 
-Inheritance model: root config + sub-project overrides.
+dev-flow uses an inheritance model: root config + per-sub-project overrides.
 
 ```
 monorepo/
 ├── .claude/dev-flow/
-│   ├── config.yaml          # Shared defaults
-│   └── review/checks.yaml   # Shared checks
+│   ├── config.yaml              # Shared defaults
+│   └── review/checks.yaml      # Shared checks
 ├── api/
 │   └── .claude/dev-flow/
-│       └── config.yaml      # Override: type=web-api, stack=[go]
+│       └── config.yaml          # Override: type=web-api, stack=[go]
 └── webapp/
     └── .claude/dev-flow/
-        └── config.yaml      # Override: type=web-app, stack=[react-ts]
+        └── config.yaml          # Override: type=web-app, stack=[react-ts]
 ```
 
-Rules:
-- Sub-project inherits everything from root
-- Sub-project can override any value
-- Absent section = inherited from root
-- `run: false` disables a check
-- Sub-project checks extend (not replace) root checks
+- Sub-projects inherit all root settings by default
+- Any value can be overridden per sub-project
+- Sub-project checks **extend** (not replace) root checks
+- `run: false` disables an inherited check
 
-## Tech Stack Templates
+## Legal Compliance
 
-Pre-built configurations for common stacks:
+dev-flow includes built-in compliance checklists for:
 
-| Template | Test Command | Lint Command |
-|----------|-------------|-------------|
-| `symfony-php` | `php bin/phpunit` | `vendor/bin/phpstan analyse` |
-| `go-api` | `go test -race ./...` | `golangci-lint run` |
-| `react-ts` | `npm test` | `npx eslint .` |
-| `flutter` | `flutter test` | `flutter analyze` |
-| `vue-ts` | `npx vitest run` | `npx eslint .` |
+| Region | Regulations |
+|--------|-------------|
+| **EU** | GDPR, ePrivacy, European Accessibility Act, AI Act, Digital Services Act |
+| **Poland** | RODO (Polish GDPR), consumer rights, e-commerce law |
+| **Sectors** | Medical devices, financial services |
 
-## Integration with Other Plugins
+Legal review runs automatically during planning (plan-level compliance check) and after each implementation phase (code-level review). It can be disabled per-task with `legal_review: false` or globally by omitting the `legal` section from config.
 
-- `superpowers:brainstorming` -- Used in planning phase
-- `superpowers:writing-plans` -- Plan format for bite-sized tasks
-- `superpowers:test-driven-development` -- Implementer TDD guidance
-- `superpowers:verification-before-completion` -- PM final verification
-- `superpowers:finishing-a-development-branch` -- Post-pipeline merge/PR
+Compliance findings can be acknowledged with documented overrides in `config.yaml`.
+
+## Integration with Superpowers
+
+dev-flow integrates with the [superpowers](https://github.com/pkpkprojects/claude-plugins) plugin ecosystem:
+
+| Skill | Used In |
+|-------|---------|
+| `superpowers:brainstorming` | Planning phase |
+| `superpowers:writing-plans` | Architect plan format |
+| `superpowers:test-driven-development` | Implementer TDD workflow |
+| `superpowers:verification-before-completion` | PM final verification |
+| `superpowers:finishing-a-development-branch` | Post-pipeline merge/PR |
 
 ## Plugin Structure
 
 ```
 dev-flow/
 ├── .claude-plugin/
-│   ├── plugin.json              # Plugin manifest
-│   └── marketplace.json         # Future publication
-├── agents/                      # 7 specialized agent definitions
+│   └── plugin.json                 # Plugin manifest (v1.1.0)
+├── agents/                         # 7 specialized agent definitions
+│   ├── architect.md
+│   ├── ux-designer.md
+│   ├── implementer.md
+│   ├── security-reviewer.md
+│   ├── legal-reviewer.md
+│   ├── acceptance-reviewer.md
+│   └── pm.md
 ├── commands/
-│   ├── dev-flow.md              # /dev-flow - main entry point
-│   └── init.md                  # /dev-flow:init - config initialization
+│   ├── dev-flow.md                 # /dev-flow -- main entry point
+│   └── init.md                     # /dev-flow:init -- project setup
 ├── skills/dev-flow/
-│   ├── SKILL.md                 # Orchestrator state machine (1100+ lines)
-│   └── prompts/                 # Agent dispatch templates
+│   ├── SKILL.md                    # Orchestrator state machine
+│   └── prompts/                    # Agent dispatch templates
 ├── hooks/
-│   ├── hooks.json               # Session start hook
-│   └── session-start.sh         # Config validation
+│   ├── hooks.json                  # Session start hook
+│   └── session-start.sh            # Config validation on startup
 ├── compliance/
-│   ├── checklists/              # Legal compliance checklists
-│   │   ├── eu/                  # GDPR, ePrivacy, EAA, AI Act, DSA
-│   │   ├── pl/                  # RODO-PL, consumer rights, e-commerce
-│   │   └── sectors/             # Medical, financial
-│   └── templates/               # Privacy policy, ToS templates
-├── templates/pipeline-config/   # Per-stack config templates
-└── test/evals/                  # Evaluation scenarios
+│   ├── checklists/                 # Legal compliance checklists
+│   │   ├── eu/                     # GDPR, ePrivacy, EAA, AI Act, DSA
+│   │   ├── pl/                     # RODO, consumer rights, e-commerce
+│   │   └── sectors/                # Medical, financial
+│   └── templates/                  # Privacy policy & ToS templates
+├── templates/pipeline-config/      # Per-stack config templates
+└── test/evals/                     # Evaluation scenarios
 ```
+
+## Key Design Decisions
+
+- **Architect is opinionated, not a stenographer.** It challenges requirements and proposes trade-offs before committing to a plan.
+- **TDD is non-negotiable.** The implementer follows strict RED-GREEN-REFACTOR. Tests come first.
+- **Security is built-in, not bolted on.** Every implementation phase includes a security review pass with stack-specific checks.
+- **Legal compliance is configurable.** Enable it per jurisdiction/sector, acknowledge findings with documented overrides, or disable it entirely.
+- **Feedback loops have bounded retries.** Failed reviews trigger implementer fixes with a maximum of 3 iterations to prevent infinite loops.
+- **Phase 3 uses Claude Code Teams.** Implementation runs as a parallel team (TeamCreate + TaskCreate) with dependency enforcement, not sequential subagents.
 
 ## License
 
