@@ -95,10 +95,30 @@ agents:
     # Example: "Focus on medical device regulations for this project."
     extra_instructions: ""
 
+  documentation-maintainer:
+    model: "sonnet"
+    # Example: "Follow Google developer documentation style guide."
+    extra_instructions: ""
+
   pm:
     model: "haiku"
     # Example: "Write ticket summaries in Polish."
     extra_instructions: ""
+
+# ---------------------------------------------------------------------------
+# Documentation configuration (optional)
+# ---------------------------------------------------------------------------
+# Controls documentation language, path, and audit settings.
+# docs:
+#   language: "en"          # Default language for docs and code comments
+#   path: "docs/"           # Documentation root directory
+
+# ---------------------------------------------------------------------------
+# Documentation audit configuration (optional)
+# ---------------------------------------------------------------------------
+# Controls the standalone docs-audit command behavior.
+# docs_audit:
+#   max_parallel_agents: 4  # Max agents to spawn in parallel during audit
 
 # ---------------------------------------------------------------------------
 # Legal compliance configuration (optional)

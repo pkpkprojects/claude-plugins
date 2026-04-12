@@ -137,6 +137,12 @@ Break the work into **bite-sized, independent phases** that each fit within a si
 ### Phase Dependency Graph
 [Visual or textual representation of which phases can run in parallel]
 
+### Documentation Update Required
+- **docs_update_needed:** Yes/No
+- **docs_hint:** [What areas of documentation need attention — e.g., "New REST endpoints in /api/v2", "Changed auth flow", "New database tables added". Leave empty if docs_update_needed is No.]
+
+When deciding whether documentation update is needed, consider: does this implementation change API surface, architecture, configuration, database schema, or user-facing behavior? Internal refactors, variable renames, or test-only changes do NOT require documentation updates. You MUST read the existing documentation in `docs/` (or the project's configured docs path) before making this decision.
+
 ### Estimated Total Complexity
 [S/M/L/XL with reasoning]
 ```

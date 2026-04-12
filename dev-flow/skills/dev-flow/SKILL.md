@@ -1,6 +1,6 @@
 ---
 name: dev-flow
-description: "Full development workflow orchestrator - from PRD/task to committed, reviewed code. Manages architect, UX designer, implementer, security reviewer, acceptance gate, and PM oversight."
+description: "Full development workflow orchestrator - from PRD/task to committed, reviewed code. Manages architect, UX designer, implementer, security reviewer, acceptance gate, documentation maintainer, and PM oversight."
 allowed-tools: Read, Glob, Grep, Bash, Write, Edit, Agent, TaskCreate, TaskUpdate, TaskList, TeamCreate, TeamDelete, SendMessage, AskUserQuestion, Skill
 ---
 
@@ -19,6 +19,7 @@ Your single responsibility is **pipeline management**: parsing input, loading co
 3. [Planning Phase](#3-planning-phase-user-interaction-required)
 4. [Design System Phase](#4-design-system-phase-optional-user-interaction)
 5. [Implementation Loop](#5-implementation-loop-per-phase-autonomous)
+5.5. [Documentation Maintenance](#55-documentation-maintenance-conditional)
 6. [PM Oversight](#6-pm-oversight-continuous)
 7. [Completion](#7-completion)
 8. [Key Patterns](#key-patterns)
@@ -893,6 +894,74 @@ How would you like to proceed?
 
 ---
 
+## 5.5. Documentation Maintenance (Conditional)
+
+After ALL implementation phases are complete (or skipped/escalated), and BEFORE PM oversight, run the documentation maintenance step if the architect flagged it.
+
+### Step 5.5.1: Check Documentation Flag
+
+Read the `APPROVED_PLAN` and check the `docs_update_needed` field.
+
+- If `docs_update_needed: false` (or not present): **Skip this phase entirely.** Proceed to Phase 6.
+- If `docs_update_needed: true`: Continue to Step 5.5.2.
+
+### Step 5.5.2: Gather Documentation Context
+
+1. **Collect cumulative diff**: Run `git diff {start_commit}..HEAD` to capture all changes from the implementation phase.
+2. **Extract docs hint**: Pull the `docs_hint` field from `APPROVED_PLAN`.
+3. **Inventory existing docs**: Use `Glob` to list all files in the project's documentation directory (default: `docs/`; check `RESOLVED_CONFIG` for `docs.path` override).
+
+### Step 5.5.3: Dispatch Documentation Maintainer
+
+Spawn a documentation-maintainer agent as a team member:
+
+```
+Tool: Agent
+subagent_type: general-purpose
+name: "documentation-maintainer"
+team_name: "{project-name}-impl"
+run_in_background: true
+model: RESOLVED_CONFIG.agents.documentation-maintainer.model (default: sonnet)
+```
+
+**Prompt must include ALL of the following inline:**
+
+1. **Role assignment**: "You are the documentation-maintainer agent in PIPELINE MODE."
+
+2. **Full documentation-maintainer agent prompt**: Copy the complete agent prompt inline (do NOT reference the file path).
+
+3. **Git diff**: The complete output of `git diff {start_commit}..HEAD`.
+
+4. **Architect's docs hint**: The `docs_hint` value from the plan.
+
+5. **Project configuration**: Full `RESOLVED_CONFIG` serialized as YAML.
+
+6. **Existing docs inventory**: List of all files found in the docs directory.
+
+7. **Extra instructions**: The value of `agents.documentation-maintainer.extra_instructions` from config (if present).
+
+8. **Explicit instruction**:
+   ```
+   Analyze the diff and architect's hint. Update, create, or remove documentation as needed.
+   Focus ONLY on areas affected by the implementation changes.
+   Check and fix stale code comments in changed files.
+   Ensure edge cases in changed code are documented (code comments for internal, docs for external).
+   Add Mermaid diagrams where they add value.
+   Commit your documentation changes.
+   Report your changes in the standard documentation update format.
+   ```
+
+### Step 5.5.4: Evaluate Documentation Report
+
+Parse the documentation-maintainer's report:
+- Extract `Documentation Update: UPDATED` or `Documentation Update: NO_CHANGES`
+- Log the report for inclusion in the PM's final report.
+- **This step does NOT produce PASS/FAIL.** Documentation maintenance is best-effort; it does not block the pipeline.
+
+Proceed to Phase 6.
+
+---
+
 ## 6. PM Oversight (Continuous)
 
 After ALL phases are complete (or skipped/escalated), the PM agent performs a final verification.
@@ -1341,6 +1410,17 @@ Quick reference for dispatching each agent type. Every dispatch uses the `Agent`
 | Output | Acceptance review with PASS/FAIL verdict |
 | User interaction | No |
 
+### Documentation Maintainer
+
+| Field | Value |
+|-------|-------|
+| When | Phase 5.5 (after all implementation phases, before PM oversight) |
+| Input | Cumulative git diff + architect's docs_hint + RESOLVED_CONFIG + existing docs inventory |
+| Skills | None |
+| Output | Updated/created documentation + Mermaid diagrams + commit |
+| User interaction | No |
+| Condition | Only runs if `docs_update_needed: true` in APPROVED_PLAN |
+
 ### PM
 
 | Field | Value |
@@ -1404,6 +1484,12 @@ INPUT (PRD/task/text)
   |     |-- Dispatch implementer (fixes)
   |     |-- Re-run failing review(s)
   |     |-- If still failing after 3 --> Escalate to user
+  |
+  v
+[5.5 Documentation Maintenance] (if docs_update_needed: true)
+  |-- Gather cumulative diff + docs hint
+  |-- Dispatch documentation-maintainer --> UPDATED/NO_CHANGES
+  |-- Log report (does NOT block pipeline)
   |
   v
 [6. PM Oversight]

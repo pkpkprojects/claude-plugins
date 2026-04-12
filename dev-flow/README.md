@@ -2,7 +2,7 @@
 
 **Full development workflow orchestrator for Claude Code** -- from PRD to committed, reviewed code.
 
-dev-flow is a Claude Code plugin that manages the entire software development lifecycle through a team of 7 specialized AI agents. Give it a task description or PRD, and it will plan, design, implement, review, and deliver production-ready code -- all following TDD, security best practices, and legal compliance.
+dev-flow is a Claude Code plugin that manages the entire software development lifecycle through a team of 8 specialized AI agents. Give it a task description or PRD, and it will plan, design, implement, review, and deliver production-ready code -- all following TDD, security best practices, and legal compliance.
 
 ## How It Works
 
@@ -39,6 +39,13 @@ dev-flow is a Claude Code plugin that manages the entire software development li
               └────────────────────┬────────────────────┘
                                    │
                     ┌──────────────▼──────────────┐
+                    │  PHASE 3.5: DOCUMENTATION    │
+                    │  (conditional)               │
+                    │  Documentation Maintainer:    │
+                    │  docs, diagrams, comments     │
+                    └──────────────┬───────────────┘
+                                   │
+                    ┌──────────────▼──────────────┐
                     │       PM REPORT              │
                     │  Tests, lint, security,      │
                     │  legal, acceptance summary    │
@@ -55,6 +62,7 @@ dev-flow is a Claude Code plugin that manages the entire software development li
 | **Security Reviewer** | Sonnet | Context-aware OWASP Top 10 review adapted to project type (CLI / web / API / mobile). |
 | **Legal Reviewer** | Sonnet | Hybrid compliance review (deterministic checklists + reasoning). Configurable per jurisdiction and sector. |
 | **Acceptance Reviewer** | Sonnet | Configurable quality gate driven by `checks.yaml`. Verifies tests, code quality, and design system compliance. |
+| **Documentation Maintainer** | Sonnet | Maintains docs, Mermaid diagrams, and code comments. Runs after implementation (pipeline mode) or as standalone audit (`/dev-flow:docs-audit`). |
 | **PM** | Haiku | Autonomous oversight -- detects stalls, suggests new checks, produces final verification report. |
 
 ## Installation
@@ -226,9 +234,11 @@ dev-flow/
 │   ├── security-reviewer.md
 │   ├── legal-reviewer.md
 │   ├── acceptance-reviewer.md
+│   ├── documentation-maintainer.md
 │   └── pm.md
 ├── commands/
 │   ├── dev-flow.md                 # /dev-flow -- main entry point
+│   ├── docs-audit.md               # /dev-flow:docs-audit -- standalone documentation audit
 │   └── init.md                     # /dev-flow:init -- project setup
 ├── skills/dev-flow/
 │   ├── SKILL.md                    # Orchestrator state machine
