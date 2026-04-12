@@ -226,7 +226,7 @@ dev-flow integrates with the [superpowers](https://github.com/obra/superpowers) 
 ```
 dev-flow/
 ├── .claude-plugin/
-│   └── plugin.json                 # Plugin manifest (v1.1.0)
+│   └── plugin.json                 # Plugin manifest (v1.2.0)
 ├── agents/                         # 7 specialized agent definitions
 │   ├── architect.md
 │   ├── ux-designer.md

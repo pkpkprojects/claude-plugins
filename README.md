@@ -8,7 +8,7 @@ A curated collection of Claude Code plugins that extend the AI coding assistant 
 
 | Plugin | Version | Description |
 |--------|---------|-------------|
-| [**dev-flow**](dev-flow/) | 1.1.0 | Full development workflow orchestrator -- from PRD to committed, reviewed code. 7 specialized agents (architect, UX designer, implementer, security reviewer, legal reviewer, acceptance gate, PM) working as a coordinated team. |
+| [**dev-flow**](dev-flow/) | 1.2.0 | Full development workflow orchestrator -- from PRD to committed, reviewed code. 8 specialized agents (architect, UX designer, implementer, security reviewer, legal reviewer, acceptance gate, documentation maintainer, PM) working as a coordinated team. |
 
 ## Installation
 

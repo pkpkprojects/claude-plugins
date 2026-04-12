@@ -945,13 +945,18 @@ After ALL phases are complete:
     review iterations needed, any accepted issues]
    </phase_outcomes>
 
+   <documentation_report>
+   [Documentation maintainer report from Phase 3.5, or "SKIPPED - not requested by architect" if docs_update_needed was false]
+   </documentation_report>
+
    Generate a final PM report that includes:
    1. Executive summary of what was built
    2. Scope verification: what was planned vs what was delivered
    3. Quality summary: review pass rates, iteration counts
    4. Known issues and accepted technical debt
-   5. Recommendations for follow-up work
-   6. Files manifest: all files created or modified
+   5. Documentation status: whether docs were updated, what was changed, diagrams added
+   6. Recommendations for follow-up work
+   7. Files manifest: all files created or modified
    ```
 
 2. Dispatch via Task tool with `subagent_type="general-purpose"` and `model=CONFIG.agents.pm.model`.
@@ -1438,6 +1443,14 @@ You are a **lightweight Project Manager** overseeing the dev-flow pipeline. You 
 ### Quality Metrics
 - Checks passed: [N]/[M]
 - Test quality: GOOD / NEEDS IMPROVEMENT
+
+### Documentation Status
+- Documentation update requested: Yes / No / Skipped
+- Files created: [N] (list)
+- Files updated: [N] (list)
+- Diagrams added: [N]
+- Edge cases documented: [N]
+- Status: UPDATED / NO_CHANGES / SKIPPED
 
 ### Files Changed
 - [path] (added/modified/deleted)

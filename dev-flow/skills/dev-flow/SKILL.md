@@ -992,6 +992,14 @@ Build a summary document covering all phases:
 - Overall verdict: PASS/FAIL
 - Critical findings: {N}
 - Acknowledged overrides: {N}
+
+### Documentation Status:
+- Documentation update requested: Yes/No
+- Documentation update result: UPDATED/NO_CHANGES/SKIPPED
+- Files created: {N}
+- Files updated: {N}
+- Diagrams added: {N}
+- Edge cases documented: {N}
 ```
 
 ### Step 6.2: Dispatch PM Agent
@@ -1030,11 +1038,14 @@ team_name: "{project-name}-impl"
       - Run: git diff {start_commit}..HEAD
       - Scan for obvious security issues (hardcoded secrets, debug code, TODO/FIXME related to security)
    4. Verify all acceptance criteria from all PASSED phases are met.
+   5. Include documentation status from Phase 5.5 in the report.
    ```
 
 7. **Skill reference**: "Use the `superpowers:verification-before-completion` skill to ensure thorough verification."
 
-8. **Report format instruction**:
+8. **Documentation report**: If Phase 5.5 ran, include the documentation-maintainer's report verbatim. If Phase 5.5 was skipped (docs_update_needed: false), note "Documentation update: SKIPPED (not requested by architect)".
+
+9. **Report format instruction**:
    ```
    Produce your report in this exact format:
 
@@ -1058,6 +1069,14 @@ team_name: "{project-name}-impl"
 
    ### Phase Verification
    {For each phase: status and whether acceptance criteria are confirmed}
+
+   ### Documentation Status
+   - Documentation update requested: Yes / No
+   - Status: UPDATED / NO_CHANGES / SKIPPED
+   - Files created: {N} (list if any)
+   - Files updated: {N} (list if any)
+   - Diagrams added: {N}
+   - Edge cases documented: {N}
 
    ### Recommendations
    - {Any non-blocking recommendations for future work}

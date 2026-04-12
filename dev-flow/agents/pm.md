@@ -137,6 +137,14 @@ Before generating the report, use the `superpowers:verification-before-completio
 - Failed checks: [list or "none"]
 - Test quality: GOOD / NEEDS IMPROVEMENT
 
+### Documentation Status
+- Documentation update requested: Yes / No / Skipped
+- Files created: [N] (list)
+- Files updated: [N] (list)
+- Diagrams added: [N]
+- Edge cases documented: [N]
+- Status: UPDATED / NO_CHANGES / SKIPPED
+
 ### Files Changed
 - `path/to/file1.ts` (added)
 - `path/to/file2.ts` (modified)
