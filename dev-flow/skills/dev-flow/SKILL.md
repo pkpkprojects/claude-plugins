@@ -1203,6 +1203,35 @@ This gives the best of both worlds:
 
 **Non-implementer agents** (reviewers, PM) are spawned as needed within the team and shut down after their task completes.
 
+### Post-Task Need Check (Agent Lifecycle)
+
+**CRITICAL**: After every `TaskUpdate(status: "completed")` from any agent, the orchestrator performs a **need check** to decide whether to keep or shutdown the agent.
+
+**Procedure:**
+
+```
+Agent completes task
+    ↓
+Orchestrator inspects PIPELINE_STATE:
+    1. Fetch remaining tasks (TaskList)
+    2. Filter tasks matching this agent's type (implementer → implementation/fix tasks, reviewer → review tasks)
+    3. If unblocked tasks exist for this agent:
+       → Assign best match via SendMessage (prefer context affinity: same module > different module)
+       → Update active_agents entry with new current_task
+    4. If only blocked tasks exist:
+       → Check if this agent will be needed when blocking tasks complete
+       → Yes: agent waits (keep alive)
+       → No: shutdown (SendMessage shutdown_request + remove from active_agents)
+    5. If no tasks remain for this agent type:
+       → Shutdown (SendMessage shutdown_request + remove from active_agents)
+```
+
+**Context affinity rule:** An implementer that worked on module X is preferred for the next task touching module X over spawning a fresh agent. This preserves context and reduces startup cost.
+
+**Active agents tracking:** On every spawn, add to `active_agents`. On every shutdown, remove. The orchestrator uses this list to know who is alive and can receive work.
+
+**Interaction with phase lifecycle:** This replaces the previous pattern of "shutdown agent when phase completes." Now, an implementer that finishes Phase 2 may be kept alive if Phase 3 touches similar files. The orchestrator decides based on remaining work, not phase boundaries.
+
 ### Team-Based Execution
 
 **CRITICAL**: All agents are spawned within a shared team using `TeamCreate` + `Agent` with `team_name`. This replaces the previous subagent-driven model.
