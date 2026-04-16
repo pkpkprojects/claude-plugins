@@ -21,10 +21,20 @@ if ! grep -q '^version:' "$CONFIG_FILE" 2>/dev/null; then
   echo "[dev-flow] Warning: $CONFIG_FILE is missing the 'version' field. Run /dev-flow:init to regenerate." >&2
 fi
 
-# Pre-create runtime directories so agents don't trigger permission prompts.
-# These are .gitignore'd -- only config files are tracked.
-mkdir -p .claude/dev-flow/reviews
+# Ensure config directory exists (tracked in git).
 mkdir -p .claude/dev-flow/review
+
+# Ensure .dev-flow/ is in the project's .gitignore (runtime artifacts, not tracked).
+if [ -f .gitignore ]; then
+  grep -qxF '.dev-flow/' .gitignore || echo '.dev-flow/' >> .gitignore
+else
+  echo '.dev-flow/' > .gitignore
+fi
+
+# Clean up stale session directories older than 24 hours (safety net for crash/abort).
+if [ -d .dev-flow ]; then
+  find .dev-flow -maxdepth 1 -mindepth 1 -type d -mmin +1440 -exec rm -rf {} + 2>/dev/null || true
+fi
 
 # Clean up stale watchdog files from previous sessions.
 rm -f .claude/dev-flow/.watchdog-* 2>/dev/null || true
