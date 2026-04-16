@@ -496,7 +496,7 @@ All agents within the team share a `TaskList` for coordination.
 
 3. Track phase status: `WAITING`, `READY`, `IN_PROGRESS`, `REVIEW`, `FIXING`, `COMPLETE`, `SKIPPED`, `ESCALATED`.
 
-4. **Implementer lifecycle:** Fresh agent spawned per phase within the team. Same agent reused for fix iterations within the same phase (via `SendMessage`). Agent shut down when phase completes.
+4. **Implementer lifecycle:** Fresh agent spawned per phase within the team. Same agent reused for fix iterations within the same phase (via `SendMessage`). After phase completes, the orchestrator runs NEED_CHECK: if remaining tasks match this agent (same module, similar files), the agent is kept and assigned the next task. If no future work exists, the agent is shut down and the slot freed.
 
 ### Step 5a: Pre-Implementation Design Update (Conditional)
 
@@ -860,7 +860,7 @@ After the implementer completes fixes:
 **Step 5e.4: Evaluate and Loop**
 
 - Increment `iteration_count`.
-- If all reviews now pass: Mark phase as `COMPLETE`. Shutdown implementer, free the slot. Move to next phase.
+- If all reviews now pass: Mark phase as `COMPLETE`. Run NEED_CHECK (see Key Patterns → Post-Task Need Check) to decide whether to keep or shutdown the implementer. Move to next phase.
 - If any review still fails AND `iteration_count < MAX_ITERATIONS`: Go back to Step 5e.1.
 - If `iteration_count >= MAX_ITERATIONS`: Proceed to Step 5e.5 (Escalation).
 
