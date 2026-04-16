@@ -91,7 +91,7 @@ Store the resolved configuration as `CONFIG` for use throughout the pipeline.
 
 ### 0.4 Permission Warmup (MANDATORY)
 
-The session-start hook pre-creates runtime directories (`.claude/dev-flow/reviews/`) and cleans up stale watchdog files from previous sessions — no permission prompts for those.
+The session-start hook ensures `.dev-flow/` is in .gitignore and cleans up stale sessions — no permission prompts for those.
 
 The pipeline still requires Bash commands throughout execution (git, watchdog timestamps, file ops). To avoid repeated permission prompts mid-pipeline, run ALL of the following commands upfront in a **single parallel batch**. The user approves each category once, and subsequent calls with matching patterns are auto-approved.
 
@@ -100,19 +100,10 @@ The pipeline still requires Bash commands throughout execution (git, watchdog ti
 git status
 
 # File operations (review files, watchdog timestamps)
-ls .claude/dev-flow/ 2>/dev/null || true
+ls .dev-flow/ 2>/dev/null || true
 
 # Timestamp operations (watchdog health monitor)
 date +%s
-
-# Watchdog file write (creates permission pattern for echo > .claude/dev-flow/.watchdog-*)
-echo "warmup" > .claude/dev-flow/.watchdog-test && rm -f .claude/dev-flow/.watchdog-test
-
-# Watchdog file read (creates permission pattern for cat .claude/dev-flow/.watchdog-*)
-cat .claude/dev-flow/.watchdog-test 2>/dev/null || true
-
-# Watchdog cleanup (creates permission pattern for rm -f .claude/dev-flow/.watchdog-*)
-rm -f .claude/dev-flow/.watchdog-test 2>/dev/null || true
 ```
 
 Run these **in parallel** (multiple Bash tool calls in a single message). If the user denies any category, note the limitation:
@@ -368,10 +359,7 @@ You MUST call TeamCreate before doing anything else in Phase 3:
 TeamCreate(team_name="dev-flow-pipeline", description="Dev-flow implementation pipeline")
 ```
 
-Create the reviews directory:
-```bash
-mkdir -p .claude/dev-flow/reviews
-```
+# Runtime directories (.dev-flow/{session-id}/) were created in Step 1.3b.
 
 ### 3.1b File Overlap Detection (Pre-Assignment)
 
@@ -396,7 +384,7 @@ TaskCreate(
   subject="Phase N: Implement [phase title]",
   description="[Phase description, files_to_touch, acceptance_criteria, UX_GUIDANCE if applicable]
     Write implementation following TDD. Commit when done.
-    Write summary to .claude/dev-flow/reviews/phase-N-implementation.md",
+    Write summary to {SESSION_DIR}/reviews/phase-N-implementation.md",
   activeForm="Implementing Phase N"
 )
 → Store task ID as IMPL_N
@@ -406,8 +394,8 @@ TaskCreate(
   description="Review code changes from Phase N: [phase title].
     Files to review: [files_to_touch]
     Read the actual code using Glob/Grep/Read.
-    Read .claude/dev-flow/reviews/phase-N-implementation.md for context.
-    Write full review to .claude/dev-flow/reviews/phase-N-security.md
+    Read {SESSION_DIR}/reviews/phase-N-implementation.md for context.
+    Write full review to {SESSION_DIR}/reviews/phase-N-security.md
     Format: ## Security Review: PASS or FAIL + findings",
   activeForm="Security reviewing Phase N"
 )
@@ -418,10 +406,10 @@ TaskCreate(
   subject="Phase N: Acceptance Review",
   description="Verify Phase N: [phase title] meets acceptance criteria.
     Acceptance criteria: [list from plan]
-    Read the code and .claude/dev-flow/reviews/phase-N-implementation.md
-    Read .claude/dev-flow/reviews/phase-N-security.md for security status.
+    Read the code and {SESSION_DIR}/reviews/phase-N-implementation.md
+    Read {SESSION_DIR}/reviews/phase-N-security.md for security status.
     Run test command and lint command from .claude/dev-flow/config.yaml.
-    Write full review to .claude/dev-flow/reviews/phase-N-acceptance.md
+    Write full review to {SESSION_DIR}/reviews/phase-N-acceptance.md
     Format: ## Acceptance Review: PASS or FAIL + per-criterion results",
   activeForm="Acceptance reviewing Phase N"
 )
@@ -441,7 +429,7 @@ This creates a strict chain per phase: `Implement → Security → Acceptance` a
 TaskCreate(
   subject="Phase N: UX Design Update",
   description="Check if Phase N needs new design system components. Create if needed.
-    Write guidance to .claude/dev-flow/reviews/phase-N-ux.md",
+    Write guidance to {SESSION_DIR}/reviews/phase-N-ux.md",
   activeForm="Designing Phase N components"
 )
 → Store task ID as UX_N
@@ -474,15 +462,16 @@ Task(
     <system>[SECURITY REVIEWER PROMPT from Appendix D]</system>
     <project_config>[CONFIG]</project_config>
     <extra_instructions>[CONFIG.agents.security-reviewer.extra_instructions]</extra_instructions>
+    <session_dir>{PIPELINE_STATE.session_dir}</session_dir>
     <checks>[Security checks from checks.yaml]</checks>
 
     You are a TEAM MEMBER named 'security-reviewer'. Your workflow:
     1. Call TaskList to find available tasks (status=pending, no blockedBy, no owner)
     2. Pick up tasks whose subject starts with 'Phase N: Security Review'
     3. Claim the task with TaskUpdate(owner='security-reviewer', status='in_progress')
-    4. Read .claude/dev-flow/reviews/phase-N-implementation.md for context
+    4. Read {SESSION_DIR}/reviews/phase-N-implementation.md for context
     5. Use Glob, Grep, Read to examine the actual committed code
-    6. Write full review to .claude/dev-flow/reviews/phase-N-security.md
+    6. Write full review to {SESSION_DIR}/reviews/phase-N-security.md
     7. Mark task completed with TaskUpdate(status='completed')
     8. Send message to team lead with PASS/FAIL result
     9. Immediately check TaskList for the next available task
@@ -503,16 +492,17 @@ Task(
     <system>[ACCEPTANCE REVIEWER PROMPT from Appendix E]</system>
     <project_config>[CONFIG]</project_config>
     <extra_instructions>[CONFIG.agents.acceptance-reviewer.extra_instructions]</extra_instructions>
+    <session_dir>{PIPELINE_STATE.session_dir}</session_dir>
     <checks>[All checks from checks.yaml]</checks>
 
     You are a TEAM MEMBER named 'acceptance-reviewer'. Your workflow:
     1. Call TaskList to find available tasks (status=pending, no blockedBy, no owner)
     2. Pick up tasks whose subject starts with 'Phase N: Acceptance Review'
     3. Claim the task with TaskUpdate(owner='acceptance-reviewer', status='in_progress')
-    4. Read .claude/dev-flow/reviews/phase-N-implementation.md for implementation context
-    5. Read .claude/dev-flow/reviews/phase-N-security.md for security review results
+    4. Read {SESSION_DIR}/reviews/phase-N-implementation.md for implementation context
+    5. Read {SESSION_DIR}/reviews/phase-N-security.md for security review results
     6. Run test and lint commands from config
-    7. Write full review to .claude/dev-flow/reviews/phase-N-acceptance.md
+    7. Write full review to {SESSION_DIR}/reviews/phase-N-acceptance.md
     8. Mark task completed with TaskUpdate(status='completed')
     9. Send message to team lead with PASS/FAIL result
     10. Immediately check TaskList for the next available task
@@ -607,6 +597,7 @@ Task(
     <system>[IMPLEMENTER PROMPT from Appendix C]</system>
     <project_config>[CONFIG]</project_config>
     <extra_instructions>[CONFIG.agents.implementer.extra_instructions]</extra_instructions>
+    <session_dir>{PIPELINE_STATE.session_dir}</session_dir>
 
     You are implementer-{slot}, a TEAM MEMBER. You work on ONLY this specific phase:
 
@@ -617,7 +608,7 @@ Task(
     Your workflow:
     1. Claim your assigned task with TaskUpdate(owner='implementer-{slot}', status='in_progress')
     2. Implement following TDD methodology
-    3. Write summary to .claude/dev-flow/reviews/phase-{N}-implementation.md
+    3. Write summary to {SESSION_DIR}/reviews/phase-{N}-implementation.md
     4. Commit your changes
     5. Mark task completed with TaskUpdate(status='completed')
     6. STOP. Do NOT look for more tasks in TaskList. Wait for instructions from the team lead.
@@ -660,7 +651,7 @@ WHILE there are phases not yet COMPLETE:
   2. REVIEW MONITORING
      Call TaskList to check status.
      For each COMPLETED review task:
-       a. Read the review file (.claude/dev-flow/reviews/phase-N-security.md or phase-N-acceptance.md)
+       a. Read the review file ({SESSION_DIR}/reviews/phase-N-security.md or phase-N-acceptance.md)
        b. Update phase.security_status or phase.acceptance_status accordingly
 
   3. FEEDBACK HANDLING
@@ -781,7 +772,7 @@ When a security or acceptance review returns FAIL:
      subject="Phase N: Fix [Security/Acceptance] Issues (iteration M)",
      description="<feedback>[Full review feedback with specific issues]</feedback>
        Fix ALL issues above. Do not introduce new functionality.
-       Write updated summary to .claude/dev-flow/reviews/phase-N-implementation.md",
+       Write updated summary to {SESSION_DIR}/reviews/phase-N-implementation.md",
      activeForm="Fixing Phase N issues"
    )
    → Store as FIX_TASK_ID
@@ -834,7 +825,7 @@ When ALL phases are COMPLETE:
 
 1. **Verify all review files exist:**
    ```bash
-   ls .claude/dev-flow/reviews/phase-*-security.md .claude/dev-flow/reviews/phase-*-acceptance.md
+   ls {SESSION_DIR}/reviews/phase-*-security.md {SESSION_DIR}/reviews/phase-*-acceptance.md
    ```
 2. **Shut down all remaining active agents** (from `active_agents` list — most should already be shut down by NEED_CHECK):
    ```
