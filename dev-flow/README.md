@@ -90,7 +90,7 @@ claude --plugin-dir dev-flow/
 
 This auto-detects your tech stack, database, i18n, design system, and Storybook setup, then generates:
 - `.claude/dev-flow/config.yaml` -- project & agent configuration
-- `.claude/dev-flow/review/checks.yaml` -- quality gate checks
+- `.claude/dev-flow/checks.yaml` -- quality gate checks
 
 ### 2. Run the pipeline
 
@@ -140,7 +140,7 @@ legal:
       reason: "Consent withdrawal requires account deletion -- intentional design"
 ```
 
-### `review/checks.yaml` -- Quality Gate
+### `checks.yaml` -- Quality Gate
 
 ```yaml
 version: "1.0"
@@ -181,7 +181,7 @@ dev-flow uses an inheritance model: root config + per-sub-project overrides.
 monorepo/
 ├── .claude/dev-flow/
 │   ├── config.yaml              # Shared defaults
-│   └── review/checks.yaml      # Shared checks
+│   └── checks.yaml              # Shared checks
 ├── api/
 │   └── .claude/dev-flow/
 │       └── config.yaml          # Override: type=web-api, stack=[go]

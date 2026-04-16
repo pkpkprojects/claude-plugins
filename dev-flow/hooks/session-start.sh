@@ -22,7 +22,7 @@ if ! grep -q '^version:' "$CONFIG_FILE" 2>/dev/null; then
 fi
 
 # Ensure config directory exists (tracked in git).
-mkdir -p .claude/dev-flow/review
+mkdir -p .claude/dev-flow
 
 # Ensure .dev-flow/ is in the project's .gitignore (runtime artifacts, not tracked).
 if [ -f .gitignore ]; then

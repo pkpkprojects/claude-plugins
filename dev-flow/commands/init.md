@@ -5,7 +5,7 @@ argument-hint: "[optional: project directory path]"
 
 # dev-flow:init -- Project Configuration Generator
 
-This command analyzes the current project's structure and generates a `.claude/dev-flow/` configuration directory with `config.yaml` and `review/checks.yaml` tailored to the detected technology stack.
+This command analyzes the current project's structure and generates a `.claude/dev-flow/` configuration directory with `config.yaml` and `checks.yaml` tailored to the detected technology stack.
 
 The optional argument `$ARGUMENTS` can be a path to the project root directory. If not provided, use the current working directory.
 
@@ -415,7 +415,7 @@ sub_projects:
 **MANDATORY: You MUST write the config file. This is the primary deliverable of this command.**
 
 Execute these steps in order:
-1. Run: `mkdir -p ${PROJECT_ROOT}/.claude/dev-flow/review`
+1. Run: `mkdir -p ${PROJECT_ROOT}/.claude/dev-flow`
 2. Use the `Write` tool to write the complete YAML to `${PROJECT_ROOT}/.claude/dev-flow/config.yaml`
 3. Verify the file was created by reading it back with the `Read` tool
 
@@ -712,9 +712,9 @@ Customize existing rules:
 
 **MANDATORY: You MUST write the checks file.**
 
-Use the `Write` tool to write the complete YAML to `${PROJECT_ROOT}/.claude/dev-flow/review/checks.yaml`. Verify it was created by reading it back.
+Use the `Write` tool to write the complete YAML to `${PROJECT_ROOT}/.claude/dev-flow/checks.yaml`. Verify it was created by reading it back.
 
-Both files (`config.yaml` and `review/checks.yaml`) MUST exist on disk before proceeding to Step 5.
+Both files (`config.yaml` and `checks.yaml`) MUST exist on disk before proceeding to Step 5.
 
 ---
 
@@ -799,10 +799,8 @@ Set up `.gitignore` so only config files are tracked and runtime artifacts (revi
 !.claude/hooks.json
 .claude/dev-flow/*
 !.claude/dev-flow/config.yaml
-!.claude/dev-flow/review/
+!.claude/dev-flow/checks.yaml
 !.claude/dev-flow/sub-projects/
-.claude/dev-flow/review/*
-!.claude/dev-flow/review/checks.yaml
 .claude/dev-flow/sub-projects/**/*
 !.claude/dev-flow/sub-projects/*/config.yaml
 ```
@@ -815,6 +813,7 @@ Set up `.gitignore` so only config files are tracked and runtime artifacts (revi
 ```bash
 cd ${PROJECT_ROOT} && git check-ignore .dev-flow/test-session/reviews/test.md && echo "OK: runtime artifacts are ignored"
 git check-ignore .claude/dev-flow/config.yaml || echo "OK: config.yaml is tracked"
+git check-ignore .claude/dev-flow/checks.yaml || echo "OK: checks.yaml is tracked"
 ```
 
 ---
@@ -839,7 +838,7 @@ Display a clear summary of what was detected and generated:
 
 ### Files Created
 - `.claude/dev-flow/config.yaml` -- main pipeline configuration
-- `.claude/dev-flow/review/checks.yaml` -- review checks configuration
+- `.claude/dev-flow/checks.yaml` -- review checks configuration
 - `.gitignore` -- updated with Claude dev-flow patterns (allowlist approach)
 [- `.claude/dev-flow/sub-projects/<name>/config.yaml` -- for each sub-project, if monorepo]
 
@@ -880,7 +879,7 @@ After presenting results to the user, commit the generated configuration files e
 ```bash
 git add .gitignore
 git add .claude/dev-flow/config.yaml
-git add .claude/dev-flow/review/checks.yaml
+git add .claude/dev-flow/checks.yaml
 git add .claude/hooks.json 2>/dev/null || true
 # For monorepos:
 git add .claude/dev-flow/sub-projects/*/config.yaml 2>/dev/null || true

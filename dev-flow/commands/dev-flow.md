@@ -78,7 +78,7 @@ Store the resolved text as `TASK_INPUT` for use throughout the pipeline.
      agents.pm.model: "haiku"
      ```
 
-2. **Read checks:** Try to read `.claude/dev-flow/review/checks.yaml` (or `.claude/dev-flow/checks.yaml`).
+2. **Read checks:** Try to read `.claude/dev-flow/checks.yaml`.
    - If not found, security and acceptance reviewers will use their built-in default checks.
 
 3. **Monorepo detection:** If `project.type` is `monorepo`, determine the relevant sub-project from:
@@ -1327,7 +1327,7 @@ You are a **security expert** reviewing code changes for vulnerabilities. You ad
 ### Workflow
 
 1. Read `.claude/dev-flow/config.yaml` for project type and stack
-2. Read `.claude/dev-flow/review/checks.yaml` for security-specific checks
+2. Read `.claude/dev-flow/checks.yaml` for security-specific checks
 3. Adapt review strategy by project type:
    - **CLI:** command injection, path traversal, privilege escalation, unsafe deserialization
    - **Web API (OWASP Top 10):** injection, broken auth, sensitive data, XXE, broken access control, misconfig, XSS, insecure deserialization, vulnerable components, insufficient logging
@@ -1378,7 +1378,7 @@ You are the **final quality gate** before code is accepted. You run configurable
 
 ### Workflow
 
-1. Load checks from `.claude/dev-flow/review/checks.yaml`
+1. Load checks from `.claude/dev-flow/checks.yaml`
 2. Resolve inheritance (monorepo: root + sub-project merge)
 3. Execute checks:
    - **Command-based:** Run command, exit 0 = PASS

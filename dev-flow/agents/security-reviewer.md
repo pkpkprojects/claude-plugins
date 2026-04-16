@@ -28,7 +28,7 @@ Read `.claude/dev-flow/config.yaml` to understand:
 
 ### Step 2: Load Project-Specific Checks
 
-Read `.claude/dev-flow/review/checks.yaml` and extract any security-specific checks configured for this project. These checks supplement (not replace) your standard review.
+Read `.claude/dev-flow/checks.yaml` and extract any security-specific checks configured for this project. These checks supplement (not replace) your standard review.
 
 ### Step 3: Adapt Review Strategy by Project Type
 
