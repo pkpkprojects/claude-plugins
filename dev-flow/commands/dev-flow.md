@@ -670,11 +670,25 @@ WHILE there are phases not yet COMPLETE:
        c. If iterations >= 3: ESCALATE to user
        d. Update phase.status = "FIXING"
 
-  4. PHASE COMPLETION
+  4. PHASE COMPLETION + NEED CHECK
      For each phase where security_status == "pass" AND acceptance_status == "pass":
        a. Update phase.status = "COMPLETE"
-       b. Shutdown the implementer: SendMessage(type="shutdown_request", recipient="implementer-{slot}", ...)
-       c. Free the slot: slot.status = "free", slot.phase = null
+       b. Run NEED_CHECK for the implementer in this phase's slot:
+          - Fetch remaining tasks (TaskList)
+          - Filter implementation/fix tasks matching this implementer
+          - If matching unblocked tasks exist:
+            → Assign next task via SendMessage (prefer tasks touching same files/module)
+            → Update active_agents: current_task = new task
+            → Do NOT free the slot
+          - If only blocked tasks that will need this implementer later:
+            → Agent waits. Do NOT free the slot yet.
+          - If no future work for this implementer:
+            → Shutdown: SendMessage(type="shutdown_request", recipient="implementer-{slot}")
+            → Free the slot: slot.status = "free", slot.phase = null
+            → Remove from active_agents
+       c. Run NEED_CHECK for each reviewer that just completed a review for this phase:
+          - Same logic: check if more review tasks exist
+          - If no more review tasks → shutdown reviewer
        d. Check if newly unblocked phases exist → update their status to READY
 
   5. STATUS DISPLAY
@@ -822,18 +836,12 @@ When ALL phases are COMPLETE:
    ```bash
    ls .claude/dev-flow/reviews/phase-*-security.md .claude/dev-flow/reviews/phase-*-acceptance.md
    ```
-2. **Shut down all active teammates** (dynamic — only agents that are still alive):
+2. **Shut down all remaining active agents** (from `active_agents` list — most should already be shut down by NEED_CHECK):
    ```
-   # Implementers: should already be shut down per-phase. If any remain:
-   For each slot in IMPLEMENTER_SLOTS where status == "busy":
-     SendMessage(type="shutdown_request", recipient="implementer-{slot}", content="Pipeline complete")
-
-   # Persistent agents:
-   SendMessage(type="shutdown_request", recipient="security-reviewer", content="All tasks complete")
-   SendMessage(type="shutdown_request", recipient="acceptance-reviewer", content="All tasks complete")
-   SendMessage(type="shutdown_request", recipient="architect", content="All tasks complete")
-   SendMessage(type="shutdown_request", recipient="ux-designer", content="All tasks complete")  # if spawned
+   For each agent in PIPELINE_STATE.active_agents:
+     SendMessage(type="shutdown_request", recipient=agent.name, content="Pipeline complete")
    ```
+   Clear `active_agents` list.
 3. **Clean up watchdog files:**
    ```bash
    rm -f .claude/dev-flow/.watchdog-*
