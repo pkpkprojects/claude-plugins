@@ -809,11 +809,11 @@ Set up `.gitignore` so only config files are tracked and runtime artifacts (revi
 
 4. Show the user a summary:
    - **Tracked (committed):** `config.yaml`, `checks.yaml`, `hooks.json`, sub-project configs
-   - **Ignored (runtime):** review reports, watchdog files, plans, worktrees, `settings.local.json`, everything else under `.claude/`
+   - **Ignored (runtime):** `.dev-flow/` (session artifacts), watchdog files, worktrees, `settings.local.json`, everything else under `.claude/` except config
 
 5. Verify with `Bash`:
 ```bash
-cd ${PROJECT_ROOT} && git check-ignore .claude/dev-flow/reviews/test.md && echo "OK: runtime artifacts are ignored"
+cd ${PROJECT_ROOT} && git check-ignore .dev-flow/test-session/reviews/test.md && echo "OK: runtime artifacts are ignored"
 git check-ignore .claude/dev-flow/config.yaml || echo "OK: config.yaml is tracked"
 ```
 

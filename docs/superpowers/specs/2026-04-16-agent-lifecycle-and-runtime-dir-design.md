@@ -1,7 +1,7 @@
 # Agent Lifecycle Management & Runtime Directory Redesign
 
 **Date:** 2026-04-16
-**Status:** Draft
+**Status:** Implemented
 **Scope:** dev-flow plugin
 
 ## Problem Statement
