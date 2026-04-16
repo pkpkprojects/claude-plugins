@@ -1115,7 +1115,7 @@ Parse the PM's report:
 ### Step 7.0: Save Legal Compliance Report
 
 If `LEGAL_REVIEW_REPORT` is not empty:
-1. Use `Write` to save the full report to `.claude/dev-flow/review/legal-review-{date}.md` in the project.
+1. Use `Write` to save the full report to `{SESSION_DIR}/reports/legal-review-{date}.md`.
 2. Include this file path in the PM report as a reference.
 
 ### Step 7.1: Present Final Report
