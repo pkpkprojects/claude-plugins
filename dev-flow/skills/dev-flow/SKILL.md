@@ -1112,11 +1112,21 @@ Parse the PM's report:
 
 ## 7. Completion
 
-### Step 7.0: Save Legal Compliance Report
+### Step 7.0: Preserve Valuable Reports
 
-If `LEGAL_REVIEW_REPORT` is not empty:
-1. Use `Write` to save the full report to `{SESSION_DIR}/reports/legal-review-{date}.md`.
-2. Include this file path in the PM report as a reference.
+For each report in `{SESSION_DIR}/reports/` (legal review, PM report, etc.):
+
+1. The orchestrator evaluates if the report has lasting value (legal compliance reports always qualify; PM reports qualify if they contain accepted risks or recommendations).
+2. If the report may be valuable, ask the user via `AskUserQuestion`:
+   ```
+   Report saved: {SESSION_DIR}/reports/{filename}
+   
+   Would you like to preserve this report permanently in docs/?
+   1. Yes — save to docs/{filename} and commit
+   2. No — it will be cleaned up with the session
+   ```
+3. If yes: copy to `docs/` (or project's configured docs path), then `git add` and `git commit`.
+4. If no: leave in `{SESSION_DIR}/reports/`, cleaned up at pipeline end.
 
 ### Step 7.1: Present Final Report
 
@@ -1176,7 +1186,17 @@ Before handling user response, gracefully shut down the implementation team:
 2. Wait for shutdown confirmations.
 3. Call `TeamDelete` to clean up team resources.
 
-### Step 7.4: Handle User Response
+### Step 7.4: Clean Up Session
+
+Remove the session's runtime directory:
+
+```bash
+rm -rf {SESSION_DIR}
+```
+
+All reports the user chose to preserve were already copied to `docs/` in Step 7.0. This cleanup ensures no stale artifacts accumulate.
+
+### Step 7.5: Handle User Response
 
 - **Create PR / finish branch**: Invoke the `superpowers:finishing-a-development-branch` skill. This handles branch management, PR creation, and any final cleanup.
 - **Address warnings**: Identify the specific phases that need rework. Create a new team (Step 5.0) and re-enter the Implementation Loop (Phase 5) for those phases only.

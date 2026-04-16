@@ -681,6 +681,13 @@ WHILE there are phases not yet COMPLETE:
           - Same logic: check if more review tasks exist
           - If no more review tasks → shutdown reviewer
        d. Check if newly unblocked phases exist → update their status to READY
+       e. Clean up phase review artifacts:
+          ```bash
+          rm -f {SESSION_DIR}/reviews/phase-N-implementation.md
+          rm -f {SESSION_DIR}/reviews/phase-N-security.md
+          rm -f {SESSION_DIR}/reviews/phase-N-acceptance.md
+          rm -f {SESSION_DIR}/reviews/phase-N-ux.md
+          ```
 
   5. STATUS DISPLAY
      Display Pipeline Status Table (see format above)
@@ -842,7 +849,12 @@ When ALL phases are COMPLETE:
    TeamDelete()
    ```
 5. **Collect phase outcomes** from all review state files.
-6. **Proceed to Phase 3.5 (Documentation Maintenance).**
+6. **Clean up session directory:**
+   ```bash
+   rm -rf {SESSION_DIR}
+   ```
+   Any reports the user chose to preserve were already copied to `docs/` in Step 7.0.
+7. **Proceed to Phase 3.5 (Documentation Maintenance).**
 
 ---
 
