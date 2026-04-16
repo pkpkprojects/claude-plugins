@@ -62,6 +62,18 @@ During input parsing, scan `TASK_TEXT` for a `legal_review: false` directive. If
    - Use `AskUserQuestion` to ask if the user wants to proceed with defaults or run init first.
    - If proceeding with defaults: use the built-in default configuration (see Section 2).
 
+### Step 1.3b: Initialize Session Directory
+
+Generate a unique session ID and create runtime directories:
+
+```bash
+SESSION_ID=$(date +%Y%m%d-%H%M%S)-$(head -c 2 /dev/urandom | xxd -p)
+mkdir -p .dev-flow/$SESSION_ID/reviews
+mkdir -p .dev-flow/$SESSION_ID/reports
+```
+
+Store `SESSION_ID` and `SESSION_DIR=".dev-flow/$SESSION_ID"` in `PIPELINE_STATE`. All agents receive `SESSION_DIR` in their prompts and use it for writing review and report artifacts.
+
 ### Step 1.4: Permission Warmup
 
 The session-start hook pre-creates runtime directories and cleans up stale watchdog files from previous sessions.
@@ -74,6 +86,7 @@ ls .claude/dev-flow/ 2>/dev/null || true            # File listing
 date +%s                                            # Timestamps (watchdog)
 echo "warmup" > .claude/dev-flow/.watchdog-test && rm -f .claude/dev-flow/.watchdog-test  # Watchdog write+cleanup
 cat .claude/dev-flow/.watchdog-test 2>/dev/null || true  # Watchdog read
+ls .dev-flow/ 2>/dev/null || true            # Runtime directory operations
 ```
 
 If any category is denied, note the limitation and proceed where possible.
@@ -1260,6 +1273,11 @@ Maintain the following state throughout the pipeline:
 
 ```
 PIPELINE_STATE = {
+  session_id: string,              # Generated at pipeline start: YYYYMMDD-HHMMSS-XXXX
+  session_dir: string,             # ".dev-flow/{session_id}"
+  active_agents: [                 # Tracked by orchestrator on every spawn/shutdown
+    { id: string, type: string, name: string, current_task: string | null, assigned_since: timestamp }
+  ],
   task_text: string,           # Original input
   resolved_config: object,     # Merged configuration
   resolved_checks: object,     # Merged checks
