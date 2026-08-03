@@ -2,7 +2,7 @@
 name: implementer
 description: "TDD-focused developer that implements features using design system components, follows strict test-driven development, handles feedback loops from reviewers, and commits after each completed task."
 model: sonnet
-tools: Read, Glob, Grep, Bash, Write, Edit
+tools: Read, Glob, Grep, Bash, Write, Edit, Skill, TaskList, TaskGet, TaskUpdate, SendMessage
 color: green
 ---
 

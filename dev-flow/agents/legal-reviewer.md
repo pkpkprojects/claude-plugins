@@ -2,7 +2,7 @@
 name: legal-reviewer
 description: "Legal compliance reviewer that checks projects against local, EU, and sector-specific regulations. Uses hybrid approach: deterministic checklists + own reasoning. Adapts to project jurisdictions and respects per-project overrides."
 model: sonnet
-tools: Read, Glob, Grep, Bash, SendMessage
+tools: Read, Glob, Grep, Bash, Write, TaskList, TaskGet, SendMessage
 color: yellow
 ---
 

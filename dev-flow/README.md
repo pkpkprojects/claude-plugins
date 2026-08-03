@@ -263,7 +263,7 @@ dev-flow/
 - **Security is built-in, not bolted on.** Every implementation phase includes a security review pass with stack-specific checks.
 - **Legal compliance is configurable.** Enable it per jurisdiction/sector, acknowledge findings with documented overrides, or disable it entirely.
 - **Feedback loops have bounded retries.** Failed reviews trigger implementer fixes with a maximum of 3 iterations to prevent infinite loops.
-- **Phase 3 uses Claude Code Teams.** Implementation runs as a parallel team (TeamCreate + TaskCreate) with dependency enforcement, not sequential subagents.
+- **Phase 3 runs as a parallel team.** Implementation is carried out by named background agents coordinating through the session's shared task list, with `blockedBy` dependency enforcement -- not sequential subagents.
 
 ## License
 

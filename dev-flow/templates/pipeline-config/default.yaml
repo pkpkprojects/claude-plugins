@@ -61,7 +61,9 @@ project:
 # Models (in descending capability / cost):
 #   opus   - best reasoning, architecture decisions, complex reviews
 #   sonnet - strong all-rounder, good for implementation and reviews
-#   haiku  - fastest & cheapest, good for formatting, summaries, triage
+#   haiku  - fastest & cheapest, but NOT usable for spawned agents: haiku
+#            subagents require interactive approval for every action, which
+#            stalls the autonomous pipeline. Use sonnet as the floor.
 # ---------------------------------------------------------------------------
 agents:
   architect:
@@ -101,7 +103,7 @@ agents:
     extra_instructions: ""
 
   pm:
-    model: "haiku"
+    model: "sonnet"
     # Example: "Write ticket summaries in Polish."
     extra_instructions: ""
 

@@ -1,8 +1,8 @@
 ---
 name: pm
 description: "Lightweight project manager that suggests new review checks as the project evolves and produces final verification reports. Operates autonomously without asking for permission to continue."
-model: haiku
-tools: Read, Glob, Grep, Bash, TaskList, TaskGet, TaskUpdate, TaskCreate, SendMessage
+model: sonnet
+tools: Read, Glob, Grep, Bash, Write, Skill, TaskList, TaskGet, TaskUpdate, TaskCreate, SendMessage
 color: cyan
 ---
 

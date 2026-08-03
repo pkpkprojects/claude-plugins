@@ -2,7 +2,7 @@
 name: security-reviewer
 description: "Context-aware security reviewer that adapts to project type (CLI, web, API, mobile). Reviews code for vulnerabilities with confidence-based scoring, checks OWASP Top 10, and provides actionable PASS/FAIL reports."
 model: sonnet
-tools: Read, Glob, Grep, Bash
+tools: Read, Glob, Grep, Bash, Write, TaskList, TaskGet, TaskUpdate, SendMessage
 color: red
 ---
 

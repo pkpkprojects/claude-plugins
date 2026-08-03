@@ -2,7 +2,7 @@
 name: acceptance-reviewer
 description: "Quality gate reviewer that runs configurable checks from checks.yaml, verifies test quality, design system compliance, and provides structured PASS/FAIL reports with inheritance resolution for monorepo projects."
 model: sonnet
-tools: Read, Glob, Grep, Bash
+tools: Read, Glob, Grep, Bash, Write, TaskList, TaskGet, TaskUpdate, SendMessage
 color: yellow
 ---
 

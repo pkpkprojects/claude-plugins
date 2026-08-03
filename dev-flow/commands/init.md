@@ -262,7 +262,7 @@ agents:
     extra_instructions: ""
 
   pm:
-    model: "haiku"
+    model: "sonnet"
     extra_instructions: ""
 ```
 
@@ -276,7 +276,7 @@ agents:
    - `security-reviewer`: **sonnet**
    - `acceptance-reviewer`: **sonnet**
    - `legal-reviewer`: **sonnet**
-   - `pm`: **haiku**
+   - `pm`: **sonnet**
 4. Customize the `extra_instructions` field per agent based on detected stack (see 4.1.1 below).
 5. Do NOT add extra sections (like `infrastructure:` or `architecture:`) -- the config schema is defined by the template. Any project-specific context goes into agent `extra_instructions`.
 

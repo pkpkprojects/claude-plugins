@@ -1,7 +1,7 @@
 ---
 name: dev-flow
 description: "Full development workflow orchestrator - from PRD/task to committed, reviewed code. Manages architect, UX designer, implementer, security reviewer, acceptance gate, documentation maintainer, and PM oversight."
-allowed-tools: Read, Glob, Grep, Bash, Write, Edit, Agent, TaskCreate, TaskUpdate, TaskList, TeamCreate, TeamDelete, SendMessage, AskUserQuestion, Skill
+allowed-tools: Read, Glob, Grep, Bash, Write, Edit, Agent, TaskCreate, TaskUpdate, TaskList, TaskGet, SendMessage, AskUserQuestion, Skill
 ---
 
 # Dev-Flow Orchestrator -- Master Pipeline
@@ -153,7 +153,7 @@ agents:
     model: "sonnet"
     extra_instructions: ""
   pm:
-    model: "haiku"
+    model: "sonnet"
     extra_instructions: ""
 ```
 
@@ -225,13 +225,17 @@ Create a **fresh agent** for the architect:
 
 ```
 Tool: Agent
-subagent_type: general-purpose
-name: "architect"
+subagent_type: dev-flow:architect
+name: "architect-plan"
 ```
+
+> Phase 3 spawns a separate architect **consultant** named `architect`. Keep the two names distinct:
+> a name is the `SendMessage` address and the newest agent claims it, so reusing one across phases
+> can route a message into a stale transcript.
 
 **Prompt to architect must include ALL of the following, inline (not as file references):**
 
-1. **Role assignment**: "You are the architect agent. Follow the instructions in the architect agent prompt."
+1. **Role assignment**: "You are the architect agent for this pipeline run." (The role, philosophy and output format come from the agent definition itself — the prompt carries only runtime data.)
 2. **Full TASK_TEXT**: The entire input text, verbatim.
 3. **Project configuration**: The full `RESOLVED_CONFIG` serialized as YAML.
 4. **Extra instructions**: The value of `agents.architect.extra_instructions` from config.
@@ -304,12 +308,12 @@ Parse this plan and extract:
 
 1. Dispatch a **fresh agent** for the legal-reviewer.
 
-   > **Note:** Phase 1 legal review runs as a standalone agent outside the team context (the implementation team does not exist yet). Do NOT pass `team_name`.
+   > **Note:** The Phase 1 legal review is a one-shot agent. It reviews the plan and reports back — it must NOT claim tasks from the shared task list (no implementation tasks exist yet).
 
    ```
    Tool: Agent
-   subagent_type: general-purpose
-   name: "legal-reviewer"
+   subagent_type: dev-flow:legal-reviewer
+   name: "legal-plan-review"
    ```
 
    **Prompt must include ALL of the following inline:**
@@ -397,6 +401,12 @@ If neither condition is met, skip directly to Phase 5.
 
 Create a **fresh agent** for the UX designer:
 
+```
+Tool: Agent
+subagent_type: dev-flow:ux-designer
+name: "ux-designer-phase4"
+```
+
 **Prompt must include ALL of the following inline:**
 
 1. **Role assignment**: "You are the UX designer agent."
@@ -407,8 +417,13 @@ Create a **fresh agent** for the UX designer:
    - `project.design_system_path`, `project.stack`, and `project.type`
 5. **Extra instructions**: The value of `agents.ux-designer.extra_instructions` from config.
 6. **UI phases**: The specific phases that require UI work, with their descriptions and acceptance criteria.
-7. **Persona requirements**: Any persona-related requirements extracted from the plan.
-8. **Explicit instructions** (vary by mode):
+7. **Existing personas**: The paths of any persona files already in the repo (`personas.md`,
+   `docs/personas/`, `design-system/personas/`, ...), or "no existing personas". Plus any
+   persona-related requirements extracted from the plan.
+8. **Design skill availability**: State whether `ui-ux-pro-max` is available in this session. The
+   agent uses it for palettes, type pairings and product-type patterns when present, and falls back
+   to its own judgement when absent.
+9. **Explicit instructions** (vary by mode):
 
    **Storybook mode** (`has_storybook: true`):
    - "This project uses Storybook. Use Mode 0 (Storybook Mode)."
@@ -471,19 +486,76 @@ Do you approve the component library? You can:
 
 This is the core execution loop. The orchestrator manages a **team** of agents that run phases through the implementation-review cycle.
 
-### Step 5.0: Create Implementation Team
+### Step 5.0: Implementation Team Composition
 
-At the start of the implementation loop, create a team for coordinating all agents:
+**There is no team-creation step.** The session already has a single implicit team and a single
+shared task list. An agent becomes a teammate simply by being spawned with the `Agent` tool and a
+`name` — that name is also its address for `SendMessage`.
 
-```
-TeamCreate(team_name="{project-name}-impl", description="Implementation team for {APPROVED_PLAN title}")
-```
-
-This team will contain:
+The implementation team consists of:
 - Up to 2 implementer agents (spawned per phase)
 - Review agents (security-reviewer, legal-reviewer, acceptance-reviewer) — spawned as needed
 
-All agents within the team share a `TaskList` for coordination.
+All of them coordinate through the shared `TaskList`. Give every agent a stable, unique `name`
+(`implementer-1`, `security-reviewer`, ...) — that is the only handle the orchestrator and the
+agents have on each other.
+
+### Step 5.0b: Create All Tasks and Dependencies (MANDATORY FIRST ACTION)
+
+**This is the first thing you do in Section 5, before spawning any agent.** The `blockedBy` graph
+built here is the ONLY thing enforcing review order — without it, agents claim work out of order and
+reviews are skipped.
+
+For each phase N in `APPROVED_PLAN`, create three tasks and chain them:
+
+```
+TaskCreate(
+  subject="Phase N: Implement {phase title}",
+  description="{phase description, files_to_touch, acceptance_criteria, UX guidance if any}
+    Write implementation following TDD. Commit when done.
+    Write summary to {SESSION_DIR}/reviews/phase-N-implementation.md",
+  activeForm="Implementing Phase N"
+)
+→ store as IMPL_N
+
+TaskCreate(
+  subject="Phase N: Security Review",
+  description="Review the code changes from Phase N. Files: {files_to_touch}.
+    Read {SESSION_DIR}/reviews/phase-N-implementation.md for context.
+    Write full review to {SESSION_DIR}/reviews/phase-N-security.md",
+  activeForm="Security reviewing Phase N"
+)
+→ store as SEC_N
+→ TaskUpdate(taskId=SEC_N, addBlockedBy=[IMPL_N])
+
+TaskCreate(
+  subject="Phase N: Acceptance Review",
+  description="Verify Phase N meets its acceptance criteria. Run the configured test and lint
+    commands. Read the phase-N implementation and security reviews.
+    Write full review to {SESSION_DIR}/reviews/phase-N-acceptance.md",
+  activeForm="Acceptance reviewing Phase N"
+)
+→ store as ACC_N
+→ TaskUpdate(taskId=ACC_N, addBlockedBy=[SEC_N])
+```
+
+Then wire the cross-phase gate so no phase starts before the previous one is accepted:
+
+```
+TaskUpdate(taskId=IMPL_(N+1), addBlockedBy=[ACC_N])
+```
+
+For phases with `UI work required: Yes` and `HAS_DESIGN_SYSTEM_OUTPUT`, also create `UX_N` and
+`TaskUpdate(taskId=IMPL_N, addBlockedBy=[UX_N])`.
+
+Legal review tasks (`LEG_N`) follow the same pattern when `LEGAL_REVIEW_ENABLED` is true, blocked by
+`IMPL_N` and blocking `ACC_N`.
+
+Record every task ID in `PIPELINE_STATE` — Step 5.0c passes each agent its own task ID, and Step 7.3
+needs the full list to clean up.
+
+**Pass task IDs explicitly.** Each agent is told its task ID in its dispatch prompt; implementers
+never search `TaskList` for work (see Step 5b).
 
 ### Phase Execution Order
 
@@ -515,13 +587,14 @@ If triggered:
 
 ### Step 5b: Implementation (via Implementer Slots)
 
-The orchestrator spawns a **fresh implementer agent** as a team member using the `Agent` tool with `team_name`. Each implementer receives ONLY its assigned phase — not the full plan.
+The orchestrator spawns a **fresh implementer agent** with the `Agent` tool. The `name` makes it a
+teammate and its `SendMessage` address. Each implementer receives ONLY its assigned phase — not the
+full plan.
 
 ```
 Tool: Agent
-subagent_type: general-purpose
+subagent_type: dev-flow:implementer
 name: "implementer-{slot}"
-team_name: "{project-name}-impl"
 ```
 
 **Prompt must include ALL of the following inline (CRITICAL: pass complete text, NOT file paths):**
@@ -594,9 +667,8 @@ If the implementer made multiple commits, adjust the range to capture all change
 
 ```
 Tool: Agent
-subagent_type: general-purpose
+subagent_type: dev-flow:security-reviewer
 name: "security-reviewer"
-team_name: "{project-name}-impl"
 ```
 
 **Prompt must include ALL of the following inline:**
@@ -658,9 +730,8 @@ Create a team member for legal review:
 
 ```
 Tool: Agent
-subagent_type: general-purpose
+subagent_type: dev-flow:legal-reviewer
 name: "legal-reviewer"
-team_name: "{project-name}-impl"
 ```
 
 **Prompt must include ALL of the following inline:**
@@ -740,9 +811,8 @@ Same as Step 5c.1 -- capture the git diff for this phase's changes.
 
 ```
 Tool: Agent
-subagent_type: general-purpose
+subagent_type: dev-flow:acceptance-reviewer
 name: "acceptance-reviewer"
-team_name: "{project-name}-impl"
 ```
 
 **Prompt must include ALL of the following inline:**
@@ -822,15 +892,38 @@ Combine all failure feedback into a single feedback document:
 {Recommendations from reviewers}
 ```
 
-**Step 5e.2: Send Feedback to the SAME Implementer**
+**Step 5e.2: Create the Fix Task, then Send Feedback to the SAME Implementer**
 
-The orchestrator sends review feedback to the **same implementer agent** that built the phase (context preserved — the agent still knows what it built):
+First create the task the implementer will claim, and gate the re-reviews behind it:
+
+```
+TaskCreate(
+  subject="Phase N: Fix review findings (iteration {i})",
+  description="{full feedback document from Step 5e.1}
+    Fix every finding, following TDD. Commit when done.
+    Update {SESSION_DIR}/reviews/phase-N-implementation.md with what changed.",
+  activeForm="Fixing Phase N review findings"
+)
+→ store as FIX_TASK_ID
+
+TaskCreate(subject="Phase N: Security Re-Review (iteration {i})", ...)   → RE_SEC_N
+→ TaskUpdate(taskId=RE_SEC_N, addBlockedBy=[FIX_TASK_ID])
+
+TaskCreate(subject="Phase N: Acceptance Re-Review (iteration {i})", ...) → RE_ACC_N
+→ TaskUpdate(taskId=RE_ACC_N, addBlockedBy=[RE_SEC_N])
+
+# Re-point the cross-phase gate at the NEW acceptance task
+→ TaskUpdate(taskId=IMPL_(N+1), addBlockedBy=[RE_ACC_N])
+```
+
+Then send the feedback to the **same implementer agent** that built the phase (context preserved —
+the agent still knows what it built). Addressing it by `name` resumes it from its transcript even if
+it already stopped:
 
 ```
 SendMessage(
-  type="message",
-  recipient="implementer-{slot}",
-  content="Phase N review failed. Fix task ID: {FIX_TASK_ID}.
+  to="implementer-{slot}",
+  message="Phase N review failed. Fix task ID: {FIX_TASK_ID}.
     Feedback: {full feedback document from Step 5e.1}.
     Pick up the fix task, address ALL issues, commit, and mark completed.",
   summary="Fix Phase N review issues"
@@ -930,9 +1023,8 @@ Spawn a documentation-maintainer agent as a team member:
 
 ```
 Tool: Agent
-subagent_type: general-purpose
+subagent_type: dev-flow:documentation-maintainer
 name: "documentation-maintainer"
-team_name: "{project-name}-impl"
 run_in_background: true
 model: RESOLVED_CONFIG.agents.documentation-maintainer.model (default: sonnet)
 ```
@@ -1021,9 +1113,8 @@ Create a PM agent as a team member:
 
 ```
 Tool: Agent
-subagent_type: general-purpose
+subagent_type: dev-flow:pm
 name: "pm"
-team_name: "{project-name}-impl"
 ```
 
 **Prompt must include ALL of the following inline:**
@@ -1182,9 +1273,17 @@ Would you like to:
 
 Before handling user response, gracefully shut down the implementation team:
 
-1. Send `SendMessage` with `type: "shutdown_request"` to each active teammate.
-2. Wait for shutdown confirmations.
-3. Call `TeamDelete` to clean up team resources.
+1. For each name in `PIPELINE_STATE.active_agents`, send:
+   ```
+   SendMessage(to="{agent-name}", message={"type": "shutdown_request", "reason": "Pipeline complete"})
+   ```
+2. Wait for shutdown confirmations, then clear `active_agents`.
+3. Clean up the shared task list — for every task this pipeline created that is still `pending`
+   or `in_progress`, call `TaskUpdate(taskId=..., status="deleted")`. Leftover tasks would be
+   picked up by unrelated agents later in the same session.
+
+   > There is no team teardown call — the session's implicit team has no lifecycle to manage.
+   > Shutting down the agents and clearing the task list IS the teardown.
 
 ### Step 7.4: Clean Up Session
 
@@ -1252,22 +1351,30 @@ Orchestrator inspects PIPELINE_STATE:
 
 **Interaction with phase lifecycle:** This replaces the previous pattern of "shutdown agent when phase completes." Now, an implementer that finishes Phase 2 may be kept alive if Phase 3 touches similar files. The orchestrator decides based on remaining work, not phase boundaries.
 
-### Team-Based Execution
+### Shared Task List Execution
 
-**CRITICAL**: All agents are spawned within a shared team using `TeamCreate` + `Agent` with `team_name`. This replaces the previous subagent-driven model.
+**CRITICAL**: All agents run as named teammates in the session's single implicit team, coordinating
+through one shared task list. This replaces the previous subagent-driven model.
+
+There is **no team setup and no team teardown** — no `TeamCreate`, no `TeamDelete`, and no
+`team_name` parameter. Those tools were removed from Claude Code; passing `team_name` is silently
+ignored. An agent joins the team by being spawned with a `name`.
 
 Benefits:
 - Agents can communicate via `SendMessage` (feedback loops, clarifications)
-- Shared `TaskList` for coordination
+- Shared `TaskList` for coordination, with `blockedBy` enforcing review gates
 - Orchestrator has visibility into all agent activity
 - Graceful shutdown via `SendMessage` with `type: "shutdown_request"`
 
-Team lifecycle:
-1. `TeamCreate` at the start of Section 5
-2. Spawn agents as team members using `Agent` with `team_name`
-3. Use `SendMessage` for inter-agent communication (especially feedback loops)
-4. `SendMessage` with `type: "shutdown_request"` for each teammate at the end
-5. `TeamDelete` after all agents have shut down
+Lifecycle:
+1. Create the pipeline's tasks with `TaskCreate` + `TaskUpdate(addBlockedBy=...)` at the start of Section 5
+2. Spawn agents with `Agent`, each with a unique `name` and its `dev-flow:*` `subagent_type`
+3. Use `SendMessage(to=..., message=..., summary=...)` for inter-agent communication (especially feedback loops)
+4. `SendMessage(to=..., message={"type": "shutdown_request", ...})` for each teammate at the end
+5. Delete any leftover pipeline tasks (`TaskUpdate(status="deleted")`) once all agents are down
+
+**Addressing:** refer to agents by `name`. A name keeps working after the agent stops — sending to
+it resumes the agent from its transcript, which is exactly what the fix-iteration loop relies on.
 
 ### Full Text in Prompt
 
@@ -1302,7 +1409,7 @@ Each agent dispatch should respect the model setting from config.yaml:
 | security-reviewer | sonnet | Detailed analysis, pattern matching |
 | legal-reviewer | sonnet | Legal compliance analysis, checklist evaluation |
 | acceptance-reviewer | sonnet | Thorough checking, rule application |
-| pm | haiku | Summary, formatting, simple verification |
+| pm | sonnet | Summary, formatting, simple verification |
 
 The config can override these. Always check `agents.{role}.model` in `RESOLVED_CONFIG`.
 
@@ -1310,7 +1417,7 @@ The config can override these. Always check `agents.{role}.model` in `RESOLVED_C
 
 To avoid exhausting context windows:
 
-- PM agent uses haiku (smallest context needs, mostly formatting).
+- PM agent has the smallest context needs (mostly formatting) and receives only summaries.
 - Reviewers receive only the diff, not the full codebase.
 - Implementers receive only their phase, not the full plan.
 - The architect receives the full task, but this is the first agent and starts clean.
@@ -1433,7 +1540,33 @@ If the architect produces a plan that is missing required sections:
 
 ## Agent Dispatch Reference
 
-Quick reference for dispatching each agent type. Every dispatch uses the `Agent` tool with `subagent_type: general-purpose` and `team_name: "{project-name}-impl"`.
+Quick reference for dispatching each agent type. Every dispatch uses the `Agent` tool with the
+plugin's own `subagent_type` and a unique `name`:
+
+| Role | `subagent_type` | `name` |
+|------|-----------------|--------|
+| Architect | `dev-flow:architect` | `architect` |
+| UX Designer | `dev-flow:ux-designer` | `ux-designer` |
+| Implementer | `dev-flow:implementer` | `implementer-{slot}` |
+| Security Reviewer | `dev-flow:security-reviewer` | `security-reviewer` |
+| Legal Reviewer | `dev-flow:legal-reviewer` | `legal-reviewer` |
+| Acceptance Reviewer | `dev-flow:acceptance-reviewer` | `acceptance-reviewer` |
+| Documentation Maintainer | `dev-flow:documentation-maintainer` | `documentation-maintainer` |
+| PM | `dev-flow:pm` | `pm` |
+
+Names must be unique among **simultaneously live** agents, since a name is the `SendMessage` address
+and the newest agent claims it. Where several instances of one role run at once, or where a role is
+dispatched in more than one phase, suffix the name: `implementer-1`/`implementer-2`,
+`architect-plan` (Phase 1) vs `architect` (Phase 3 consultant), `docs-{module-slug}` for the
+per-module agents in `/dev-flow:docs-audit`.
+
+Never pass `team_name` (removed) or `mode` (ignored — subagents inherit the session's permission
+mode). The role and philosophy come from the agent definition; the prompt carries runtime data only.
+
+> **Fallback:** if a `dev-flow:*` agent is spawned but never claims a task and never replies, it is
+> missing a tool it was told to use. Verify its `tools:` line includes `TaskList`, `TaskGet`,
+> `TaskUpdate` and `SendMessage`; only as a last resort fall back to `general-purpose` for that one
+> dispatch, with a comment explaining why.
 
 ### Architect
 
@@ -1450,8 +1583,8 @@ Quick reference for dispatching each agent type. Every dispatch uses the `Agent`
 | Field | Value |
 |-------|-------|
 | When | Phase 4 (Design System) and Phase 5a (pre-implementation) |
-| Input | APPROVED_PLAN + design system inventory + RESOLVED_CONFIG |
-| Skills | None |
+| Input | APPROVED_PLAN + design system inventory + existing personas + RESOLVED_CONFIG |
+| Skills | `ui-ux-pro-max` (and its `design-system` / `ui-styling` / `brand` variants) when available — the agent checks and falls back gracefully |
 | Output | Design system components, personas, gallery |
 | User interaction | Yes (Phase 4 approval), No (Phase 5a incremental) |
 

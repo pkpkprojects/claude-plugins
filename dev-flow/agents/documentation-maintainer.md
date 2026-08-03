@@ -2,7 +2,7 @@
 name: documentation-maintainer
 description: "Maintains project documentation, updates docs and code comments to match code changes, creates Mermaid diagrams, and ensures edge cases are documented. Operates in pipeline mode (scoped to changes) or audit mode (full module audit)."
 model: sonnet
-tools: Read, Glob, Grep, Bash, Write, Edit
+tools: Read, Glob, Grep, Bash, Write, Edit, TaskList, TaskGet, TaskUpdate, SendMessage
 color: green
 ---
 

@@ -89,11 +89,11 @@ Wait for user confirmation before continuing.
 
 ## Phase 2: Team Execution
 
-### 2.1 Create Team
+### 2.1 Team Setup (No Setup Call Required)
 
-```
-TeamCreate(team_name="{project}-docs-audit")
-```
+There is no team-creation step. The session has a single implicit team and one shared task list;
+agents join it by being spawned with a `name`. Do NOT call `TeamCreate` (removed from Claude Code)
+and do NOT pass `team_name` (accepted but ignored). Start directly with 2.2.
 
 ### 2.2 Create Tasks
 
@@ -110,6 +110,7 @@ TaskCreate(
     Commit changes when done.",
   activeForm="Auditing [module name] docs"
 )
+→ Store the returned task ID as TASK_ID[module] — you MUST pass it to that module's agent in 2.3
 ```
 
 ### 2.3 Spawn Agents
@@ -119,27 +120,36 @@ Spawn documentation-maintainer agents as team members, up to `max_parallel_agent
 For each agent, the prompt must include:
 
 1. **Role**: "You are a documentation-maintainer agent in AUDIT MODE."
-2. **The full documentation-maintainer agent prompt** (from Appendix A below)
-3. **Module assignment**: The specific module path and scope
-4. **Project configuration**: `RESOLVED_CONFIG` serialized as YAML
-5. **Existing docs inventory**: List of existing documentation files related to this module
-6. **Instructions**:
+2. **Module assignment**: The specific module path and scope
+3. **Project configuration**: `RESOLVED_CONFIG` serialized as YAML
+4. **Existing docs inventory**: List of existing documentation files related to this module
+5. **Instructions**:
    ```
+   You are a TEAM MEMBER named '[agent name]'. Your assigned task ID is [TASK_ID].
+
    Perform a full documentation audit of the assigned module:
-   1. Read all code in [module_path]
-   2. Read all existing documentation related to this module
-   3. Identify gaps, stale content, missing diagrams
-   4. Update or create documentation
-   5. Fix stale code comments
-   6. Document undocumented edge cases
-   7. Add Mermaid diagrams where they add value
-   8. Commit your changes with message: "docs: audit [module_name] documentation"
-   9. Report your changes in the standard documentation update format
+   1. Claim your task: TaskUpdate(taskId=[TASK_ID], owner='[agent name]', status='in_progress')
+   2. Read all code in [module_path]
+   3. Read all existing documentation related to this module
+   4. Identify gaps, stale content, missing diagrams
+   5. Update or create documentation
+   6. Fix stale code comments
+   7. Document undocumented edge cases
+   8. Add Mermaid diagrams where they add value
+   9. Commit your changes with message: "docs: audit [module_name] documentation"
+   10. Mark the task done: TaskUpdate(taskId=[TASK_ID], status='completed')
+   11. Report your changes to the orchestrator: SendMessage(to="main", message=<your report
+       in the standard documentation update format>, summary="Docs audit: [module_name]")
+   12. STOP. Do NOT claim other modules' tasks from TaskList.
    ```
 
+   Pass each agent the ID of the task created for its module in 2.2 — without it the agent cannot
+   claim or complete its task, and the monitor in 2.4 will never observe progress.
+
 **Spawn all agents in a single message** with multiple parallel Agent tool calls. Each agent:
-- `subagent_type: "general-purpose"`
-- `team_name: "{project}-docs-audit"`
+- `subagent_type: "dev-flow:documentation-maintainer"` — its role prompt loads from the agent
+  definition, so the prompt above carries only the module assignment and runtime config
+- `name: "docs-{module-slug}"` — unique per agent; this is its `SendMessage` address
 - `run_in_background: true`
 - `model: RESOLVED_CONFIG.agents.documentation-maintainer.model` (default: sonnet)
 
@@ -158,13 +168,12 @@ If an agent fails:
 
 ## Phase 3: Consistency Pass
 
-After all module agents complete, spawn one final documentation-maintainer agent for cross-module consistency:
+After all module agents complete, spawn one final documentation-maintainer agent for cross-module
+consistency (`subagent_type: "dev-flow:documentation-maintainer"`, `name: "docs-consistency"`):
 
 **Prompt:**
 ```
 You are a documentation-maintainer agent performing a CONSISTENCY PASS.
-
-[Full documentation-maintainer agent prompt from Appendix A]
 
 All module-level documentation has been updated. Your job is to ensure cross-module consistency:
 
@@ -217,9 +226,14 @@ Gather all agent reports and compile a summary:
 
 ### 4.2 Cleanup
 
+Delete any audit tasks left over on the shared task list:
+
 ```
-TeamDelete(team_name="{project}-docs-audit")
+For each audit task still pending or in_progress:
+  TaskUpdate(taskId=<id>, status="deleted")
 ```
+
+There is no team teardown call — clearing the task list IS the cleanup.
 
 Present the report to the user. Done.
 
@@ -247,9 +261,3 @@ docs:
   path: "docs/"
 ```
 
----
----
-
-# APPENDIX A: DOCUMENTATION-MAINTAINER PROMPT
-
-[When dispatching the documentation-maintainer agent, copy the full agent prompt from `dev-flow/agents/documentation-maintainer.md` into this section. The orchestrator skill will embed it inline in the agent dispatch call.]
