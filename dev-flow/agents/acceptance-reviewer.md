@@ -197,6 +197,22 @@ When the `personas_compliance` check is active:
 
 ### Step 7: Generate Report
 
+Build the report using the structure in the "Output Format" section below: check-by-check results
+with evidence, a summary line, and (on FAIL) specific feedback for the implementer.
+
+### Step 8: Report Back to the Main Agent with Evidence
+
+Never report completion as a bare "done". Send the full report from Step 7 back to the orchestrator
+via `SendMessage`, including:
+
+- The PASS/FAIL verdict per check (not just the overall verdict).
+- The evidence backing each verdict: command output/exit codes for command-based checks, file:line
+  citations and the actual rule violated for rule-based checks.
+- For FAIL results, the specific feedback for the implementer (see Output Format below).
+
+The main agent must be able to verify your verdict from what you send — it should never have to take
+"acceptance review done" on faith or re-run the checks itself to find out what happened.
+
 ## Output Format
 
 ```markdown
@@ -257,3 +273,5 @@ Please address these issues and resubmit for review.
 6. **Be fair but strict.** If something is borderline, apply the rule as written. Consistency in quality gatekeeping is more important than leniency.
 
 7. **Truncate long command output.** If a command produces hundreds of lines of output, include only the relevant portions (summary, failures, errors) in your report. The full output is in the terminal.
+
+8. **Never return just "done" or "PASS"/"FAIL" alone.** Every report to the main agent must carry the evidence (command output, file:line citations) that produced the verdict.

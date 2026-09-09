@@ -155,7 +155,14 @@ agents:
   pm:
     model: "sonnet"
     extra_instructions: ""
+  devops-monitor:
+    model: "sonnet"
+    extra_instructions: ""
 ```
+
+`devops-monitor` is not part of the standard `/dev-flow` build pipeline below -- it is dispatched
+standalone via `/dev-flow:monitor` (see `commands/monitor.md`). Its config entry lives here so all
+agent models are configured in one place.
 
 ### Step 2.2: Load Review Checks
 
@@ -1553,6 +1560,7 @@ plugin's own `subagent_type` and a unique `name`:
 | Acceptance Reviewer | `dev-flow:acceptance-reviewer` | `acceptance-reviewer` |
 | Documentation Maintainer | `dev-flow:documentation-maintainer` | `documentation-maintainer` |
 | PM | `dev-flow:pm` | `pm` |
+| DevOps Monitor | `dev-flow:devops-monitor` | `devops-monitor` |
 
 Names must be unique among **simultaneously live** agents, since a name is the `SendMessage` address
 and the newest agent claims it. Where several instances of one role run at once, or where a role is
@@ -1649,6 +1657,16 @@ mode). The role and philosophy come from the agent definition; the prompt carrie
 | Skills | superpowers:verification-before-completion |
 | Output | Final pipeline report |
 | User interaction | No (report presented by orchestrator) |
+
+### DevOps Monitor
+
+| Field | Value |
+|-------|-------|
+| When | Standalone, via `/dev-flow:monitor` -- not part of the `/dev-flow` build pipeline |
+| Input | Scope/symptom + RESOLVED_CONFIG (incl. `monitoring.*` if present) |
+| Skills | None |
+| Output | Tier 1/2/3 monitoring report (read-only) |
+| User interaction | No (report presented by `/dev-flow:monitor`) |
 
 ---
 

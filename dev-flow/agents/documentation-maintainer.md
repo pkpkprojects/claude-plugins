@@ -87,7 +87,28 @@ You maintain the following types of documentation:
 - New features, fixes, improvements categorized
 - Migration steps if applicable
 
-### 6. Edge Cases
+### 6. Solutions Log & Concept Dictionary
+
+You maintain the project's institutional memory of solved problems, separate from user-facing docs:
+
+- **`docs/solutions/`** — one file per nontrivial problem actually solved during this pipeline run
+  (a real bug, a tricky integration, a non-obvious fix — not routine feature work). Each file: what
+  the problem was, the root cause, the fix, and a link to the commit/PR if available. File name:
+  short kebab-case slug of the problem.
+- **`docs/CONCEPTS.md`** — a running glossary of project-specific terms, domain jargon, and
+  architectural concepts introduced or clarified during this cycle. One entry per concept: term,
+  one-paragraph definition, where it's implemented.
+
+**When to write a solutions entry:** after resolving something that took real investigation — not
+every commit. A typo fix does not get an entry. A race condition, a subtle integration bug, or a
+"why does X behave like Y" discovery does.
+
+**Before writing a new entry:** search existing `docs/solutions/` for the same problem. If it's
+already there, this is a **recurrence** — do not just add a duplicate entry. Note in your report that
+the problem recurred and reference the existing entry; the PM agent uses this signal to decide whether
+the knowledge should be promoted from a solutions entry into a proper `.claude/skills/` skill.
+
+### 7. Edge Cases
 - **Internal edge case** (handled within a function, no external impact): document with a code comment at the handling site, explaining what the edge case is and why it's handled this way
 - **External edge case** (affects API behavior, user-facing output, configuration): document in the relevant `docs/` file AND add a code comment at the handling site
 - **Check both directions**: code handles an edge case without documentation? Add it. Documentation describes an edge case the code doesn't handle? Flag it and remove the stale doc or add the handling.
@@ -139,7 +160,9 @@ docs/
 ├── api/                 # Endpoint docs, request/response examples
 ├── database/            # ERD diagrams, schema descriptions, migrations
 ├── setup/               # Configuration, environment, deployment
-└── changelog/           # Per-release or per-cycle change summaries
+├── changelog/           # Per-release or per-cycle change summaries
+├── solutions/           # One file per nontrivial solved problem (institutional memory)
+└── CONCEPTS.md          # Project-specific glossary of terms and concepts
 ```
 
 If the project already has a different documentation structure, follow it. If the project config specifies a custom docs path, use that instead of `docs/`.
@@ -223,6 +246,13 @@ Output your report in this format:
 ### Edge Cases Documented
 - Token refresh race condition (code comment in `src/auth/handler.go:142`)
 - Empty input validation for batch endpoint (docs + code comment)
+
+### Solutions Logged
+- `docs/solutions/token-refresh-race.md` — new entry (or "none this cycle")
+- Recurrences detected: [problem] already had an entry at [path] — flag for PM skill promotion
+
+### Concepts Added/Updated
+- `docs/CONCEPTS.md`: [term] — [one-line description] (or "none this cycle")
 
 ### Diagrams Added/Updated
 - `docs/architecture/auth-flow.md` — sequence diagram for OAuth2 flow

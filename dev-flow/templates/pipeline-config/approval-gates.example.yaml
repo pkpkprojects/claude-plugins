@@ -1,0 +1,31 @@
+# dev-flow approval gates -- OPT-IN.
+#
+# Copy this file to .claude/dev-flow/approval-gates.yaml to enable it. Its mere
+# presence turns on the PreToolUse hook (hooks/approval-gate.sh); if the file
+# doesn't exist, no gating happens at all.
+#
+# Matching is substring-based on the file path (Edit/Write) or full command
+# text (Bash) -- keep patterns specific enough to avoid over-blocking.
+#
+# List items may be indented with any number of spaces (no tabs) and quoted
+# with single or double quotes, or left unquoted.
+
+version: "1.0"
+
+# Edit/Write to any path containing one of these substrings is blocked.
+# The agent is told to ask the user for explicit approval instead.
+protected_paths:
+  - ".claude/dev-flow/config.yaml"
+  - ".claude/dev-flow/approval-gates.yaml"
+  - "migrations/"
+  - ".github/workflows/"
+
+# Bash commands containing one of these substrings are blocked outright.
+# Use this for anything that touches production or shared infrastructure
+# that must go through a human/release process instead.
+blocked_commands:
+  - "terraform apply"
+  - "kubectl delete"
+  - "kubectl apply"
+  - "docker push"
+  - " prod "

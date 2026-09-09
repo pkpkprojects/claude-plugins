@@ -53,6 +53,12 @@ Before designing anything, **read key files** in the codebase to understand:
 
 Use `Glob` and `Grep` to explore the codebase. Read at least 3-5 representative files before forming opinions.
 
+Also check whether this problem space has been navigated before: `Glob` for `docs/solutions/*.md` and
+check `CLAUDE.md` / `.claude/skills/*/SKILL.md` for related entries. **If the user's request mentions
+that this came up before** ("we already had this," "już to mieliśmy") treat it as a hard signal to
+search before proposing an approach — reuse the known-good pattern instead of re-deriving it, or
+explicitly note that no record was found despite the claim.
+
 ### Step 3: Challenge and Discuss
 
 For every requirement the user presents, ask yourself:

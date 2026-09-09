@@ -2,7 +2,7 @@
 
 **Full development workflow orchestrator for Claude Code** -- from PRD to committed, reviewed code.
 
-dev-flow is a Claude Code plugin that manages the entire software development lifecycle through a team of 8 specialized AI agents. Give it a task description or PRD, and it will plan, design, implement, review, and deliver production-ready code -- all following TDD, security best practices, and legal compliance.
+dev-flow is a Claude Code plugin that manages the entire software development lifecycle through a team of 9 specialized AI agents. Give it a task description or PRD, and it will plan, design, implement, review, and deliver production-ready code -- all following TDD, security best practices, and legal compliance.
 
 ## How It Works
 
@@ -62,8 +62,9 @@ dev-flow is a Claude Code plugin that manages the entire software development li
 | **Security Reviewer** | Sonnet | Context-aware OWASP Top 10 review adapted to project type (CLI / web / API / mobile). |
 | **Legal Reviewer** | Sonnet | Hybrid compliance review (deterministic checklists + reasoning). Configurable per jurisdiction and sector. |
 | **Acceptance Reviewer** | Sonnet | Configurable quality gate driven by `checks.yaml`. Verifies tests, code quality, and design system compliance. |
-| **Documentation Maintainer** | Sonnet | Maintains docs, Mermaid diagrams, and code comments. Runs after implementation (pipeline mode) or as standalone audit (`/dev-flow:docs-audit`). |
-| **PM** | Haiku | Autonomous oversight -- detects stalls, suggests new checks, produces final verification report. |
+| **Documentation Maintainer** | Sonnet | Maintains docs, Mermaid diagrams, and code comments, plus the `docs/solutions/` problem log and `docs/CONCEPTS.md` glossary. Runs after implementation (pipeline mode) or as standalone audit (`/dev-flow:docs-audit`). |
+| **PM** | Sonnet | Autonomous oversight -- detects stalls, suggests new checks, promotes recurring problems into skills, curates existing skills, flags stage-gate status, produces final verification report. |
+| **DevOps Monitor** | Sonnet | Tool-agnostic, read-only diagnostics -- logs, metrics, deployments, payment signals, using whatever the project has connected (Grafana, Datadog, Stripe, etc.). Standalone via `/dev-flow:monitor`, not part of the build pipeline. |
 
 ## Installation
 
@@ -226,8 +227,8 @@ dev-flow integrates with the [superpowers](https://github.com/obra/superpowers) 
 ```
 dev-flow/
 ├── .claude-plugin/
-│   └── plugin.json                 # Plugin manifest (v1.2.0)
-├── agents/                         # 7 specialized agent definitions
+│   └── plugin.json                 # Plugin manifest (v1.5.0)
+├── agents/                         # 9 specialized agent definitions
 │   ├── architect.md
 │   ├── ux-designer.md
 │   ├── implementer.md
@@ -235,17 +236,20 @@ dev-flow/
 │   ├── legal-reviewer.md
 │   ├── acceptance-reviewer.md
 │   ├── documentation-maintainer.md
-│   └── pm.md
+│   ├── pm.md
+│   └── devops-monitor.md
 ├── commands/
 │   ├── dev-flow.md                 # /dev-flow -- main entry point
 │   ├── docs-audit.md               # /dev-flow:docs-audit -- standalone documentation audit
+│   ├── monitor.md                  # /dev-flow:monitor -- standalone read-only monitoring sweep
 │   └── init.md                     # /dev-flow:init -- project setup
 ├── skills/dev-flow/
 │   ├── SKILL.md                    # Orchestrator state machine
 │   └── prompts/                    # Agent dispatch templates
 ├── hooks/
-│   ├── hooks.json                  # Session start hook
-│   └── session-start.sh            # Config validation on startup
+│   ├── hooks.json                  # Session start + approval-gate hooks
+│   ├── session-start.sh            # Config validation on startup
+│   └── approval-gate.sh            # PreToolUse gate for protected paths/commands (opt-in)
 ├── compliance/
 │   ├── checklists/                 # Legal compliance checklists
 │   │   ├── eu/                     # GDPR, ePrivacy, EAA, AI Act, DSA
@@ -255,6 +259,29 @@ dev-flow/
 ├── templates/pipeline-config/      # Per-stack config templates
 └── test/evals/                     # Evaluation scenarios
 ```
+
+## Approval Gates (Opt-In)
+
+Copy `templates/pipeline-config/approval-gates.example.yaml` to `.claude/dev-flow/approval-gates.yaml`
+to block agents from editing protected paths (e.g., CI config, migrations) or running blocked commands
+(e.g., `kubectl delete`, `terraform apply`) without human approval. The `PreToolUse` hook
+(`hooks/approval-gate.sh`) enforces this; if the file doesn't exist, nothing is gated.
+
+## Monitoring (`/dev-flow:monitor`)
+
+Standalone, read-only diagnostics -- not part of the `/dev-flow` build pipeline. Dispatches the
+DevOps Monitor agent, which detects whatever observability tooling the project actually has connected
+(Grafana/Datadog MCP servers, generic `docker`/`kubectl`/`gh` logs, Stripe signals if configured, a
+read-only DB connection if one exists) and reports findings in tiers (log / diagnose / escalate). It
+never deploys, rolls back, or writes to anything.
+
+## Institutional Memory (`docs/solutions/`, `docs/CONCEPTS.md`)
+
+The Documentation Maintainer logs nontrivial solved problems to `docs/solutions/` and project-specific
+terms to `docs/CONCEPTS.md`. The Architect and Implementer check this log (plus `CLAUDE.md` and
+`.claude/skills/`) before starting work -- especially when the task text signals "we already had this
+problem." When a problem recurs, the PM agent promotes it from a solutions entry into a proper
+`.claude/skills/<name>/SKILL.md` file, keeping `CLAUDE.md` itself short.
 
 ## Key Design Decisions
 

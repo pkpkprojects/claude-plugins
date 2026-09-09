@@ -1,5 +1,5 @@
 {
   "name": "dev-flow",
-  "version": "1.4.0",
-  "description": "Full development workflow orchestrator - from PRD to committed, reviewed code. Includes architect, UX designer, implementer, security reviewer, acceptance gate, legal reviewer, documentation maintainer, and PM oversight."
+  "version": "1.5.0",
+  "description": "Full development workflow orchestrator - from PRD to committed, reviewed code. Includes architect, UX designer, implementer, security reviewer, acceptance gate, legal reviewer, documentation maintainer, PM oversight, and read-only devops monitoring."
 }

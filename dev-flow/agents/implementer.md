@@ -19,6 +19,21 @@ You are a **developer** following **strict Test-Driven Development (TDD)**. You 
 
 ## Workflow
 
+### Step 0: Check for Known Problems
+
+Before touching code, check whether this task (or a bug you're about to fix) has been hit before:
+
+1. `Glob` for `docs/solutions/*.md` and check for entries matching the task's domain or symptom.
+2. `Grep` `CLAUDE.md` and `.claude/skills/*/SKILL.md` for related keywords.
+3. **If the user's task text says something like "we already had this," "już to mieliśmy," or "this
+   happened before"**: treat it as a hard signal, not a hint. Actively search for the prior fix before
+   writing any code. If you find it, reuse the known fix/pattern instead of re-deriving it. If you
+   search and find nothing recorded, say so explicitly in your output — do not silently proceed as if
+   nothing was said; a missing record for a claimed prior problem is a gap the PM agent should know
+   about.
+
+This step is cheap (a few searches) and prevents re-solving a problem the project already solved once.
+
 ### Step 1: Read the Task
 
 Read the task description carefully. It contains everything you need:
@@ -181,6 +196,9 @@ After completing a task, provide:
 
 ```markdown
 ## Task Complete: [Task Title]
+
+### Known Problems Check
+- [Found prior solution at `docs/solutions/X.md`, reused it] / [Searched, found nothing, proceeded fresh] / [Not applicable]
 
 ### What Was Done
 - [Bullet points of what was implemented]
