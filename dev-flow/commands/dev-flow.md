@@ -127,6 +127,25 @@ Store `SESSION_ID` and `SESSION_DIR=".dev-flow/$SESSION_ID"` in `PIPELINE_STATE`
 
 ---
 
+## Phase 0.6: Brainstorming Gate (Non-Trivial Tasks Only)
+
+Before Phase 1, decide whether `TASK_INPUT` is trivial or non-trivial:
+
+- **Trivial** (skip this gate, go straight to Phase 1): a single reported bug with a clear reproduction
+  and no architecture/identity impact, a single-file fix, a scoped copy/config change.
+- **Non-trivial** (run this gate first): a new feature, anything multi-phase, anything touching how
+  data is addressed/identified/synced (see the project's addressing-change rule if one exists), or
+  anything where requirements are still ambiguous.
+
+For non-trivial tasks, invoke the `superpowers:brainstorming` skill on `TASK_INPUT` before dispatching
+the architect. Its job is to pull every open decision out of the user up front, in one pass, so that
+none of Phase 3's phases have to stop and ask "should I continue?" later — by the time Phase 3 starts,
+every decision needed across every phase must already be answered. If brainstorming surfaces a decision
+that only affects one later phase, resolve it now anyway rather than deferring the question to
+mid-pipeline.
+
+---
+
 ## Phase 1: Planning (Architect + Security Review) -- Iterative Conversation
 
 Phase 1 is a **conversation between architect and security reviewer** to produce a secure, scalable plan. The architect may overlook security details (e.g., JWT refresh tokens, session management, CORS policies). The security reviewer challenges these before implementation begins.
@@ -428,6 +447,10 @@ TaskCreate(
     Acceptance criteria: [list from plan]
     Read the code and {SESSION_DIR}/reviews/phase-N-implementation.md
     Read {SESSION_DIR}/reviews/phase-N-security.md for security status.
+    is_final_phase: [true if N is the last phase in PLAN, else false] -- run only speed:fast checks
+      unless this is true; speed:slow checks (e2e/behat) run ONLY on the final phase.
+    is_bugfix: [true if this phase fixes a reported bug] -- if true, verify the RED/GREEN commit
+      proof per the acceptance-reviewer's 'Verify Bug Fix Proof' step before passing.
     Run test command and lint command from .claude/dev-flow/config.yaml.
     Write full review to {SESSION_DIR}/reviews/phase-N-acceptance.md
     Format: ## Acceptance Review: PASS or FAIL + per-criterion results",
@@ -521,7 +544,9 @@ Agent(
     3. Claim the task with TaskUpdate(owner='acceptance-reviewer', status='in_progress')
     4. Read {SESSION_DIR}/reviews/phase-N-implementation.md for implementation context
     5. Read {SESSION_DIR}/reviews/phase-N-security.md for security review results
-    6. Run test and lint commands from config
+    6. Run checks per the task's is_final_phase flag: speed:fast checks always; speed:slow checks
+       (e2e/behat) ONLY when is_final_phase is true. If is_bugfix is true, also verify the RED/GREEN
+       commit proof before passing.
     7. Write full review to {SESSION_DIR}/reviews/phase-N-acceptance.md
     8. Mark task completed with TaskUpdate(status='completed')
     9. Report to the orchestrator: SendMessage(to="main", message=<PASS/FAIL + per-criterion results>, summary="Phase N acceptance review")

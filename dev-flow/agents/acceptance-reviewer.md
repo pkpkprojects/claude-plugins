@@ -31,13 +31,22 @@ checks:
     name: "All Tests Pass"
     category: standard
     run: true
+    speed: fast
     command: "npm test"
 
   - id: lint_clean
     name: "Lint Clean"
     category: standard
     run: true
+    speed: fast
     command: "npm run lint"
+
+  - id: e2e_pass
+    name: "E2E / Slow Suite Passes"
+    category: standard
+    run: true
+    speed: slow
+    command: "npm run test:e2e"
 
   - id: no_hardcoded_secrets
     name: "No Hardcoded Secrets"
@@ -104,9 +113,27 @@ Sub:  [lint_clean(run:false), i18n(run:true)]
 Result: [tests_pass(run:true), lint_clean(run:false), owasp(run:true), i18n(run:true)]
 ```
 
+### Step 2b: Fast vs Slow Checks (Multi-Phase Plans)
+
+Every check has a `speed` field: `fast` (default, if absent) or `slow`. This distinguishes cheap
+targeted/unit checks from expensive ones (e2e, behat, full browser suites).
+
+You are told via `<is_final_phase>true|false</is_final_phase>` in your dispatch prompt whether the
+phase you are reviewing is the last phase of the current plan/wave.
+
+- **`is_final_phase: false`:** run only checks with `speed: fast`. Skip `speed: slow` checks entirely
+  — do not run them "just to be safe." Report them as `SKIPPED (deferred to final phase)`, not as
+  PASS or FAIL.
+- **`is_final_phase: true`:** run ALL active checks, fast and slow. This is the only point where the
+  full gate (including e2e/behat) runs.
+
+This exists because slow suites can take hours; re-running them after every phase in a multi-phase
+plan is not affordable. Do not second-guess this and run them anyway "to be thorough" on
+non-final phases — that defeats the point.
+
 ### Step 3: Execute Checks
 
-For each check where `run: true`:
+For each check where `run: true` and (this is the final phase, or `speed` is `fast`):
 
 #### Command-Based Checks
 If the check has a `command` field:
@@ -194,6 +221,27 @@ When the `personas_compliance` check is active:
    - Vocabulary level matches the persona's tech comfort level
    - Messages are empathetic where the persona expects empathy
    - Messages are direct where the persona expects directness
+
+### Step 6b: Verify Bug Fix Proof (bug-report tasks only)
+
+If this task fixes a reported bug, the implementer must have produced two separate commits (see
+implementer's "Bug Fix Proof" workflow): a RED commit (failing test only) and a GREEN commit (the
+fix). Do not accept a bare claim that this happened — verify it:
+
+1. `git log` the task's commits, identify the RED commit and the GREEN commit.
+2. `git checkout` the RED commit, run the specific new test, confirm it actually FAILS. `git checkout`
+   back.
+3. `git checkout` the GREEN commit (or current HEAD), run the same test, confirm it PASSES.
+4. Confirm the GREEN diff is an implementation fix, not a weakened/removed assertion in the test
+   itself. If the test changed between RED and GREEN in a way that reduces what it checks, FAIL this
+   check and say exactly what was weakened.
+5. Confirm the test genuinely reproduces the bug as described in the report (read the bug description,
+   compare against what the test actually exercises) — a passing but unrelated test is not proof.
+6. If RED and GREEN were squashed into one commit, FAIL: the proof is unverifiable and must be redone
+   with separate commits.
+
+Report this as its own check (`bugfix_red_green_proof`) in the output below, not folded into
+`tests_pass`.
 
 ### Step 7: Generate Report
 
