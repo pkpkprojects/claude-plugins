@@ -16,6 +16,7 @@ Your single responsibility is **pipeline management**: parsing input, loading co
 
 1. [Input Parsing](#1-input-parsing)
 2. [Configuration Loading](#2-configuration-loading)
+2.5. [Brainstorming Gate](#25-brainstorming-gate-non-trivial-tasks-only)
 3. [Planning Phase](#3-planning-phase-user-interaction-required)
 4. [Design System Phase](#4-design-system-phase-optional-user-interaction)
 5. [Implementation Loop](#5-implementation-loop-per-phase-autonomous)
@@ -190,6 +191,12 @@ agent models are configured in one place.
    - Filter: A checklist matches when ALL conditions in its `applies_when` are satisfied: the project's jurisdictions must include at least one value from the checklist's `jurisdictions`, AND (if the checklist specifies `sectors`) the project's `sectors` must include at least one value from the checklist's `sectors`, AND (if the checklist specifies `extras`) the project's `extras` must include at least one value from the checklist's `extras`.
    - Store as `LEGAL_CHECKLISTS`.
 
+Compute one canonical gate and reuse it everywhere:
+
+`LEGAL_REVIEW_APPLIES = LEGAL_CONFIG is not null AND TASK_TEXT is not tagged hotfix or refactor AND LEGAL_REVIEW_ENABLED is true`.
+
+Do not reimplement this predicate in task creation, plan review, code review, or re-review.
+
 ### Step 2.4: Monorepo Configuration Inheritance
 
 When `project.type` is `monorepo` and `TARGET_SUBPROJECTS` has been identified:
@@ -219,6 +226,17 @@ When `project.type` is `monorepo` and `TARGET_SUBPROJECTS` has been identified:
 5. Store the resolved configuration as `RESOLVED_CONFIG` and resolved checks as `RESOLVED_CHECKS`.
 
 For non-monorepo projects, `RESOLVED_CONFIG` = the root config, `RESOLVED_CHECKS` = the root checks.
+
+---
+
+## 2.5. Brainstorming Gate (Non-Trivial Tasks Only)
+
+Before planning, classify the task:
+
+- **Trivial:** a clear, reproduced single bug without architecture or identity impact; a single-file fix; or a scoped copy/config change. Continue directly to planning.
+- **Non-trivial:** a new feature, multi-phase work, an addressing/identity/sync change, or work with unresolved product decisions. Invoke `superpowers:brainstorming` on `TASK_TEXT` and resolve the decisions before planning.
+
+Do not defer known product decisions to implementation. Once the user approves the plan, the implementation phases run without repeated "continue?" prompts unless a review escalation or a genuinely new decision blocks progress.
 
 ---
 
@@ -309,9 +327,27 @@ Parse this plan and extract:
 - `UI_PHASES`: phases where "UI work required" is Yes
 - `PARALLEL_GROUPS`: groups of phases that can execute in parallel
 
+### Step 3.5a: Security Review of the Plan (Mandatory)
+
+Dispatch a fresh `dev-flow:security-reviewer` named `security-plan-review`. Give it the complete
+`ARCHITECT_PLAN`, `RESOLVED_CONFIG`, and security-reviewer extra instructions. State explicitly that
+it is reviewing architecture, not code, and must challenge the full threat model rather than a fixed
+example checklist.
+
+Store its full output as `SECURITY_REVIEW`.
+
+- On `PASS`, continue to legal review.
+- On `NEEDS REVISION` or `FAIL`, dispatch a fresh architect with the current `ARCHITECT_PLAN` and the
+  security findings. Replace `ARCHITECT_PLAN` with the revision, parse its phases again, and repeat
+  this security review.
+- After three unsuccessful security iterations, stop and escalate both viewpoints to the user.
+
+Never present an internal review as the plan. Never claim security passed unless the most recent
+`ARCHITECT_PLAN` received an explicit `PASS` from this step.
+
 ### Step 3.5b: Legal Plan Review (Conditional)
 
-**Entry condition:** `LEGAL_CONFIG` is not null AND the task is not tagged as `hotfix` or `refactor` AND `LEGAL_REVIEW_ENABLED` is `true` (see Step 1.2b).
+**Entry condition:** `LEGAL_REVIEW_APPLIES` is true.
 
 1. Dispatch a **fresh agent** for the legal-reviewer.
 
@@ -337,6 +373,8 @@ Parse this plan and extract:
    - Feed the requirements back to the architect agent for integration as acceptance criteria in the relevant phases.
    - If requirements span all phases (e.g., "must have privacy policy"), instruct the architect to create a dedicated phase or add to an existing cross-cutting phase.
    - **Store the architect's revised plan as `ARCHITECT_PLAN`.**
+   - Return to Step 3.5a. Any architect revision invalidates the previous security verdict. After
+     security passes again, repeat legal review against the revised plan.
    - Store the legal review output as `LEGAL_REVIEW` (internal only).
 
 4. Log legal review results for PM report.
@@ -537,8 +575,13 @@ TaskCreate(
 
 TaskCreate(
   subject="Phase N: Acceptance Review",
-  description="Verify Phase N meets its acceptance criteria. Run the configured test and lint
+  description="Acceptance criteria (verify every item independently): {acceptance_criteria}.
+    These criteria are the primary acceptance contract. Run the configured test and lint
     commands. Read the phase-N implementation and security reviews.
+    is_final_phase: {true when N is the final phase, otherwise false}. Run speed:fast checks for
+    every phase; run speed:slow checks only when is_final_phase is true.
+    is_bugfix: {true when this phase fixes a reported bug}. When true, verify the separate RED and
+    GREEN commits using the acceptance-reviewer's Bug Fix Proof procedure.
     Write full review to {SESSION_DIR}/reviews/phase-N-acceptance.md",
   activeForm="Acceptance reviewing Phase N"
 )
@@ -555,14 +598,31 @@ TaskUpdate(taskId=IMPL_(N+1), addBlockedBy=[ACC_N])
 For phases with `UI work required: Yes` and `HAS_DESIGN_SYSTEM_OUTPUT`, also create `UX_N` and
 `TaskUpdate(taskId=IMPL_N, addBlockedBy=[UX_N])`.
 
-Legal review tasks (`LEG_N`) follow the same pattern when `LEGAL_REVIEW_ENABLED` is true, blocked by
-`IMPL_N` and blocking `ACC_N`.
+Legal review tasks (`LEG_N`) are created only when `LEGAL_REVIEW_APPLIES` is true. They are blocked
+by `SEC_N` and block `ACC_N`. Otherwise do not create `LEG_N` and block `ACC_N` directly on `SEC_N`.
 
 Record every task ID in `PIPELINE_STATE` — Step 5.0c passes each agent its own task ID, and Step 7.3
 needs the full list to clean up.
 
 **Pass task IDs explicitly.** Each agent is told its task ID in its dispatch prompt; implementers
 never search `TaskList` for work (see Step 5b).
+
+### Step 5.0c: Task Lifecycle Contract
+
+Every Phase 5 agent prompt must include its exact task ID (`IMPL_N`, `SEC_N`, `LEG_N`, `ACC_N`, or
+a re-review task). Each agent must:
+
+1. Call `TaskGet` for that ID and confirm it is unblocked.
+2. Claim only that task with `TaskUpdate(owner=<agent name>, status="in_progress")`.
+3. Perform the assigned work and write the required review artifact.
+4. Implementers mark the task completed only after the implementation artifact exists. Reviewers
+   mark a gate completed only on PASS. A FAIL or BLOCKED review remains in progress, so it cannot
+   release downstream dependencies. On FAIL, only the orchestrator may retire the failed gate after
+   Step 5e has installed its replacement dependency chain.
+5. Send the verdict or completion evidence to `main` with `SendMessage`.
+
+Do not tell agents to discover or self-assign work from `TaskList`. A task without an explicit owner,
+completion update, or required artifact is not complete; its downstream dependency remains blocked.
 
 ### Phase Execution Order
 
@@ -606,7 +666,9 @@ name: "implementer-{slot}"
 
 **Prompt must include ALL of the following inline (CRITICAL: pass complete text, NOT file paths):**
 
-1. **Role assignment**: "You are implementer-{slot}. Your job is to write production-quality code following TDD for this specific phase."
+1. **Role and task assignment**: "You are implementer-{slot}. Your assigned task ID is {IMPL_N}.
+   Follow the Step 5.0c task lifecycle contract. Your job is to write production-quality code
+   following TDD for this specific phase."
 
 2. **Single phase description**: The complete text of THIS phase only, including:
    - Phase title and description
@@ -680,7 +742,9 @@ name: "security-reviewer"
 
 **Prompt must include ALL of the following inline:**
 
-1. **Role assignment**: "You are the security-reviewer agent. Review the following code changes for security vulnerabilities."
+1. **Role and task assignment**: "You are the security-reviewer agent. Your assigned task ID is
+   {SEC_N}. Follow the Step 5.0c task lifecycle contract. Review the following code changes for
+   security vulnerabilities."
 
 2. **The git diff**: The complete diff output from Step 5c.1.
 
@@ -725,11 +789,11 @@ Parse the security reviewer's output:
 - Extract `Verdict` (PASS or FAIL)
 - Extract all findings with their severities
 - If `PASS`: proceed to Step 5c.5 (Legal Review) or Step 5d if legal review is not configured.
-- If `FAIL`: proceed to Step 5e (Feedback Loop).
+- If `FAIL`: leave `SEC_N` in progress and proceed to Step 5e (Feedback Loop).
 
 ### Step 5c.5: Legal Compliance Review (Conditional)
 
-**Entry condition:** `LEGAL_CONFIG` is not null AND the task is not tagged as `hotfix` or `refactor` AND `LEGAL_REVIEW_ENABLED` is `true` (see Step 1.2b).
+**Entry condition:** `LEGAL_REVIEW_APPLIES` is true.
 
 **Step 5c.5.1: Dispatch legal-reviewer**
 
@@ -743,7 +807,9 @@ name: "legal-reviewer"
 
 **Prompt must include ALL of the following inline:**
 
-1. **Role assignment**: "You are the legal-reviewer agent. Review the following code changes for legal compliance. Use Mode 2: Code/Feature Review."
+1. **Role and task assignment**: "You are the legal-reviewer agent. Your assigned task ID is {LEG_N}.
+   Follow the Step 5.0c task lifecycle contract. Review the following code changes for legal
+   compliance. Use Mode 2: Code/Feature Review."
 
 2. **The git diff**: Complete diff output (same as gathered for security review).
 
@@ -804,7 +870,7 @@ Parse the legal reviewer's output:
 - Extract all findings
 - Store full report text as `LEGAL_REVIEW_REPORT` for PM and orchestrator to save
 - If `PASS`: proceed to Step 5d (Acceptance Review).
-- If `FAIL` (CRITICAL findings): proceed to Step 5e (Feedback Loop).
+- If `FAIL` (CRITICAL findings): leave `LEG_N` in progress and proceed to Step 5e (Feedback Loop).
 
 ### Step 5d: Acceptance Review
 
@@ -824,11 +890,15 @@ name: "acceptance-reviewer"
 
 **Prompt must include ALL of the following inline:**
 
-1. **Role assignment**: "You are the acceptance-reviewer agent. Verify that the implementation meets all acceptance criteria and quality standards."
+1. **Role and task assignment**: "You are the acceptance-reviewer agent. Your assigned task ID is
+   {ACC_N}. Follow the Step 5.0c task lifecycle contract. Verify that the implementation meets all
+   acceptance criteria and quality standards."
 
 2. **The git diff**: The complete diff output.
 
-3. **Phase acceptance criteria**: The specific acceptance criteria from the plan for this phase.
+3. **Phase acceptance criteria**: The exact acceptance criteria stored in the assigned acceptance
+   task, copied verbatim from the approved plan. Instruct the reviewer to map every criterion to
+   independently obtained evidence. Missing, ambiguous, or unverifiable criteria mean `BLOCKED`.
 
 4. **Full RESOLVED_CHECKS**: All checks from checks.yaml (standard + security + optional where `run: true`), fully resolved with inheritance. Include check ids, names, commands, and rules.
 
@@ -836,17 +906,22 @@ name: "acceptance-reviewer"
 
 6. **Extra instructions**: The value of `agents.acceptance-reviewer.extra_instructions` from config.
 
-7. **Output format instruction**:
+7. **Execution flags**:
+   - `is_final_phase`: Run `speed:fast` checks for every phase. Run `speed:slow` checks (for example E2E or Behat) only for the final phase.
+   - `is_bugfix`: Verify the separate RED and GREEN commits using the acceptance-reviewer's Bug Fix Proof procedure.
+
+8. **Output format instruction**:
    ```
    Produce your review in this exact format:
 
    ## Acceptance Review Result
 
-   **Verdict: PASS | FAIL**
+   **Verdict: PASS | FAIL | BLOCKED**
 
    ### Acceptance Criteria
    For each criterion from the plan:
-   - [ ] or [x] [Criterion text] -- [explanation of pass/fail]
+   - **[Criterion text]**: PASS | FAIL | BLOCKED
+     - Evidence: [independently observed command/result, runtime behavior, or file:line]
 
    ### Check Results
    For each active check:
@@ -861,16 +936,22 @@ name: "acceptance-reviewer"
 
    A verdict of FAIL requires at least one unmet acceptance criterion
    or a failing mandatory check (standard checks with run: true).
+   PASS requires every acceptance criterion and every applicable mandatory check to pass.
+   BLOCKED means a criterion could not be verified or a required check could not execute; it is
+   never equivalent to PASS.
    ```
 
 **Step 5d.3: Evaluate acceptance review result**
 
 Parse the acceptance reviewer's output:
-- Extract `Verdict` (PASS or FAIL)
+- Extract `Verdict` (PASS, FAIL, or BLOCKED)
 - Extract acceptance criteria results
 - Extract check results
 - If `PASS`: Mark phase as `PASSED`. Move to the next phase.
-- If `FAIL`: Proceed to Step 5e (Feedback Loop).
+- If `FAIL`: Leave `ACC_N` in progress and proceed to Step 5e (Feedback Loop).
+- If `BLOCKED`: Do not create a code-fix task unless the blocker is caused by the implementation.
+  Leave the review task `in_progress`, resolve the missing prerequisite or escalate to the user,
+  then resume or replace the reviewer using the same still-open task ID. Only PASS completes it.
 
 ### Step 5e: Feedback Loop
 
@@ -916,11 +997,28 @@ TaskCreate(
 TaskCreate(subject="Phase N: Security Re-Review (iteration {i})", ...)   → RE_SEC_N
 → TaskUpdate(taskId=RE_SEC_N, addBlockedBy=[FIX_TASK_ID])
 
-TaskCreate(subject="Phase N: Acceptance Re-Review (iteration {i})", ...) → RE_ACC_N
-→ TaskUpdate(taskId=RE_ACC_N, addBlockedBy=[RE_SEC_N])
+If `LEGAL_REVIEW_APPLIES` is true:
+TaskCreate(subject="Phase N: Legal Re-Review (iteration {i})", ...)      → RE_LEG_N
+→ TaskUpdate(taskId=RE_LEG_N, addBlockedBy=[RE_SEC_N])
+
+TaskCreate(
+  subject="Phase N: Acceptance Re-Review (iteration {i})",
+  description="Acceptance criteria (copied verbatim from ACC_N): {acceptance_criteria}.
+    Re-verify every criterion independently after the fixes. Prior findings: {acceptance_findings}.",
+  ...
+) → RE_ACC_N
+→ TaskUpdate(taskId=RE_ACC_N, addBlockedBy=[RE_LEG_N if created, otherwise RE_SEC_N])
 
 # Re-point the cross-phase gate at the NEW acceptance task
 → TaskUpdate(taskId=IMPL_(N+1), addBlockedBy=[RE_ACC_N])
+
+# Only after the replacement chain and cross-phase gate exist, retire the failed review task and
+# any superseded downstream review tasks from the previous chain. Retire downstream tasks first,
+# while they are still blocked, and the failed task last. Never release the old chain before the
+# replacement acceptance gate is attached.
+# Example: on SEC_N failure, complete superseded ACC_N, then LEG_N when present, then SEC_N. On
+# LEG_N failure, complete superseded ACC_N, then LEG_N. On ACC_N failure, complete ACC_N. These
+# completion updates mean "superseded by the installed re-review chain", not PASS.
 ```
 
 Then send the feedback to the **same implementer agent** that built the phase (context preserved —
@@ -932,7 +1030,8 @@ SendMessage(
   to="implementer-{slot}",
   message="Phase N review failed. Fix task ID: {FIX_TASK_ID}.
     Feedback: {full feedback document from Step 5e.1}.
-    Pick up the fix task, address ALL issues, commit, and mark completed.",
+    Follow the Step 5.0c task lifecycle contract for this exact task ID. Address ALL issues,
+    update the implementation artifact, commit, and mark the task completed.",
   summary="Fix Phase N review issues"
 )
 ```
@@ -952,10 +1051,13 @@ The implementer then:
 
 After the implementer completes fixes:
 
-- If the security review failed: re-run Step 5c (fresh security-reviewer agent in team).
-- If the legal review failed: re-run Step 5c.5 (fresh legal-reviewer agent in team).
-- If the acceptance review failed: re-run Step 5d (fresh acceptance-reviewer agent in team).
-- If multiple failed: re-run in order: security review → legal review → acceptance review (each only if the previous passes).
+- Re-run Step 5c with `RE_SEC_N` as the assigned task ID.
+- If `LEGAL_REVIEW_APPLIES` is true, re-run Step 5c.5 with `RE_LEG_N` as the assigned task ID.
+- Re-run Step 5d with `RE_ACC_N` as the assigned task ID.
+
+The re-review tasks replace the original review task IDs for this iteration. Do not reuse an already
+completed task or leave a newly created re-review task unclaimed. Run reviews in order: security →
+legal (when enabled) → acceptance; each starts only after the previous task completes successfully.
 
 **Step 5e.4: Evaluate and Loop**
 
