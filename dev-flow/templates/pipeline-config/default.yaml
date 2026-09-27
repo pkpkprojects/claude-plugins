@@ -97,6 +97,21 @@ agents:
     # Example: "Focus on medical device regulations for this project."
     extra_instructions: ""
 
+  billing-reviewer:
+    model: "sonnet"
+    # Example: "We sell B2B only; skip consumer withdrawal mechanics."
+    extra_instructions: ""
+
+  mobile-reviewer:
+    model: "sonnet"
+    # Example: "Offline sync is the core feature; weigh local DB migrations highest."
+    extra_instructions: ""
+
+  infra-reviewer:
+    model: "sonnet"
+    # Example: "Deployments run on on-prem VMs with Docker Compose."
+    extra_instructions: ""
+
   documentation-maintainer:
     model: "sonnet"
     # Example: "Follow Google developer documentation style guide."
@@ -138,3 +153,31 @@ agents:
 #     #   reason: "Withdrawal requires account deletion — conscious decision."
 #     #   decided_by: "team-lead"
 #     #   decided_at: "2026-01-15"
+
+# ---------------------------------------------------------------------------
+# Domain reviews (optional)
+# ---------------------------------------------------------------------------
+# Specialist gates that run only when a phase touches their `triggers` (path globs).
+# Checklists: dev-flow/review-checklists/{billing,mobile,infra}/. Overrides work like legal ones;
+# `kind: policy` checks are opinionated defaults you may override with your own decision.
+#
+# domain_reviews:
+#   billing:
+#     enabled: true
+#     providers: [stripe]            # any web PSP name (stripe, adyen, paddle, mollie, przelewy24, blik, payu, ...); app_store / google_play for store billing
+#     jurisdictions: [PL, EU]        # loads shared legal subscription checklists even without a legal section
+#     triggers: ["**/billing/**", "**/*payment*", "**/*subscription*", "**/*invoice*", "**/*stripe*", "**/*checkout*"]
+#     overrides: []
+#       # - check: BILL-03
+#       #   status: ACKNOWLEDGED
+#       #   reason: "SEPA enabled with a designed pending state and deadline."
+#       #   decided_by: "team-lead"
+#       #   decided_at: "2026-01-15"
+#   mobile:
+#     enabled: true
+#     triggers: ["lib/**", "ios/**", "android/**", "pubspec.yaml"]
+#     overrides: []
+#   infra:
+#     enabled: true
+#     triggers: ["**/Dockerfile*", "**/docker-compose*.yml", "**/*.nomad*", "**/*.hcl", ".github/workflows/**", "**/migrations/**", "**/terraform/**", "**/ansible/**", "**/k8s/**", "**/helm/**"]
+#     overrides: []

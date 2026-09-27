@@ -1,0 +1,87 @@
+name: Observability and scalability
+version: "1.0"
+applies_when: {}
+severity_default: MEDIUM
+
+checks:
+  - id: INFRA-OBS-01
+    area: "Structured logs with redaction on new write paths"
+    question: "Does a new or changed write path (data mutation, sync, external API call) emit structured logs, and do those logs redact sensitive fields rather than logging full payloads?"
+    severity: HIGH
+    kind: rule
+    hints:
+      - "Check log statements near the changed write path for structured fields vs raw string concatenation"
+      - "Check for PII/secret fields (email, token, password, full request body) logged unredacted"
+    remediation: "Log structured fields (event, entity id, status, duration) instead of raw payload dumps. Redact or omit PII, tokens, and secrets before logging."
+
+  - id: INFRA-OBS-02
+    area: "Error tracking doesn't drown in noise"
+    question: "Are expected/handled errors (validation failures, expected 404s) kept out of the error-tracking channel that's meant for unexpected failures, so a real spike is still visible?"
+    severity: MEDIUM
+    kind: policy
+    hints:
+      - "Check if routine 4xx/validation errors are sent to the same alerting channel as unhandled exceptions"
+    remediation: "Route expected/handled errors to regular logs, and reserve the error-tracking/alerting channel for unexpected failures, so noise doesn't mask a real incident."
+
+  - id: INFRA-OBS-03
+    area: "Alert exists for the new failure mode"
+    question: "If this change introduces a new way the system can fail (a new external dependency, a new async job, a new write path), is there an alert or dashboard signal for it?"
+    severity: HIGH
+    kind: policy
+    hints:
+      - "Check if a new dependency/job has a corresponding metric, alert rule, or dashboard panel"
+    remediation: "Add a metric/alert for the new failure mode (e.g. job failure rate, new dependency error rate) before shipping, so the team doesn't discover it via a user report."
+
+  - id: INFRA-OBS-04
+    area: "SLO/error-budget impact considered"
+    question: "For a change touching a service with a defined SLO, is the expected impact on error budget/latency noted, rather than shipped without consideration?"
+    severity: LOW
+    kind: policy
+    hints:
+      - "Check the plan/PR description for any mention of SLO or latency impact"
+    remediation: "Note the expected SLO/latency impact in the plan or PR description, even briefly, so it's a conscious tradeoff."
+
+  - id: INFRA-OBS-05
+    area: "Observability live before shipping a write/sync path"
+    question: "For a new or changed sync/write path specifically, is reject-path logging (with redacted payloads) and error tracking already live before this ships, not planned for later?"
+    severity: CRITICAL
+    kind: rule
+    hints:
+      - "Check whether the new write/sync path has any logging/error tracking wired up at all, vs. relying on 'we'll add it if there's a problem'"
+    remediation: "Wire up reject-path logging and error tracking before shipping the write/sync path. Being unable to spot a client error-storm within an hour from logs alone means you're shipping blind."
+
+  - id: INFRA-SCALE-01
+    area: "Statelessness"
+    question: "Does the service avoid storing state in local process memory or local disk that would break if a second instance were started or this instance were replaced?"
+    severity: CRITICAL
+    kind: rule
+    hints:
+      - "Search for in-memory caches/session storage used as the source of truth, or writes to a local disk path that isn't ephemeral scratch space"
+    remediation: "Move state that must survive or be shared across instances into a shared store (DB, cache cluster, object storage). Keep local disk usage limited to ephemeral scratch/cache that can be lost without consequence."
+
+  - id: INFRA-SCALE-02
+    area: "No hidden single point of failure introduced"
+    question: "Does this change introduce a dependency on exactly one instance of something (one cache node, one queue consumer, one cron-only host) that the rest of the system now silently relies on?"
+    severity: HIGH
+    kind: policy
+    hints:
+      - "Check for a new component described as running 'on one box' or with no failover/redundancy story"
+    remediation: "Either make the new component redundant or explicitly document the accepted single point of failure and its blast radius."
+
+  - id: INFRA-SCALE-03
+    area: "On-prem is a first-class deployment target"
+    question: "Does this change avoid hardcoding an assumption that only a specific cloud provider's managed service is available (e.g. a cloud-only queue/secret manager/load balancer API with no on-prem equivalent path)?"
+    severity: HIGH
+    kind: policy
+    hints:
+      - "Check for direct calls to a cloud-provider-specific managed service SDK with no abstraction or documented on-prem alternative"
+    remediation: "Abstract the dependency behind an interface with an on-prem-compatible implementation (self-hosted queue, Vault instead of a cloud KMS, etc.), or explicitly flag the cloud-only assumption as a deliberate scope decision."
+
+  - id: INFRA-SCALE-04
+    area: "Backups and restore drills for new stateful components"
+    question: "If this change introduces a new stateful component (new datastore, new persistent volume), is there a backup strategy for it from day one?"
+    severity: HIGH
+    kind: rule
+    hints:
+      - "Check if a new datastore/volume is covered by the existing backup tooling/schedule, or left out"
+    remediation: "Add the new stateful component to the existing backup schedule and restore-drill process before it holds real data."

@@ -1,0 +1,65 @@
+name: Redirect / bank-transfer payment providers (e.g. Przelewy24, BLIK, PayU, iDEAL)
+version: "2026.1"
+applies_when:
+  providers: [przelewy24, blik, payu, tpay, ideal, redirect]
+severity_default: HIGH
+
+# Redirect and instant-transfer methods confirm payment asynchronously. Verify the provider's current
+# API docs for exact endpoint names; the rules below are provider-independent.
+
+checks:
+  - id: RPSP-01
+    kind: rule
+    area: "Return URL is not a payment confirmation"
+    question: "Is the payment treated as paid only after the provider's server-to-server status notification is verified (signature/checksum) and, where the provider requires it, confirmed with a verification call - never because the customer landed on the return URL?"
+    severity: CRITICAL
+    hints:
+      - "Return URLs can be opened without paying"
+      - "Some providers (e.g. Przelewy24) require an explicit transaction verification call after the notification, otherwise the transaction is not finalized"
+    remediation: "Grant on verified notification + verification call; show a 'waiting for payment confirmation' state on return."
+
+  - id: RPSP-02
+    kind: rule
+    area: "Amount and currency checked on notification"
+    question: "Does the notification handler compare amount, currency and order/session ID with the stored order before accepting it?"
+    severity: CRITICAL
+    hints:
+      - "A valid signature for a different amount must be rejected"
+    remediation: "Reject and alert on mismatch."
+
+  - id: RPSP-03
+    kind: rule
+    area: "Pending state has a deadline"
+    question: "Is there a designed pending state with a deadline, a 'payment received' email and cleanup of abandoned sessions?"
+    severity: HIGH
+    hints:
+      - "Without it BILL-01 turns into silent free access or orphaned orders"
+    remediation: "Add pending status, expiry job and confirmation email."
+
+  - id: RPSP-04
+    kind: rule
+    area: "Recurring charges"
+    question: "For subscriptions, is recurring charging done through the provider's supported recurring mechanism (card tokenization or recurring BLIK mandate) with explicit customer consent, and does the design NOT assume the provider runs subscription logic (proration, dunning, schedules) the way Stripe does?"
+    severity: CRITICAL
+    hints:
+      - "Many local providers only offer a charge primitive; renewals, retries, grace and plan changes become our code"
+      - "Check which rules from billing core (BILL-02..BILL-13) now need a local scheduler"
+    remediation: "List which billing-core rules the app implements itself and cover them with tests using controlled time."
+
+  - id: RPSP-05
+    kind: rule
+    area: "Refunds"
+    question: "Are refunds issued through the provider API and reconciled by the provider's refund notification, not assumed successful on request?"
+    severity: HIGH
+    hints:
+      - "Refunds of bank transfers can take days or fail"
+    remediation: "Track refund status from notifications."
+
+  - id: RPSP-06
+    kind: rule
+    area: "Notification idempotency and retries"
+    question: "Are provider notifications processed idempotently (atomic claim, success-only completion) and does the handler respond with the exact acknowledgement the provider expects?"
+    severity: HIGH
+    hints:
+      - "Same invariants as BILL-20"
+    remediation: "Reuse the webhook claim mechanism for this provider."

@@ -1,0 +1,122 @@
+name: Deploy safety and container hygiene
+version: "1.0"
+applies_when: {}
+severity_default: HIGH
+
+checks:
+  - id: INFRA-DEP-01
+    area: "Health/readiness checks reflect real dependencies"
+    question: "Does the service's readiness/health check actually verify its real dependencies (DB, cache, downstream services) rather than always returning 200?"
+    severity: CRITICAL
+    kind: rule
+    hints:
+      - "Search for /health, /ready, /healthz endpoint implementations"
+      - "Check if the handler does anything beyond returning a static 200"
+    remediation: "Make readiness checks verify the dependencies the service actually needs to serve traffic (DB connection, required upstream). Keep liveness checks separate and lightweight so a slow dependency doesn't trigger unnecessary restarts."
+
+  - id: INFRA-DEP-02
+    area: "Graceful shutdown"
+    question: "Does the service handle SIGTERM by draining in-flight requests/jobs before exiting, instead of dying immediately?"
+    severity: CRITICAL
+    kind: rule
+    hints:
+      - "Search for a SIGTERM/SIGINT handler"
+      - "Check if the process exits immediately on signal or waits for active connections/jobs to finish (with a timeout)"
+    remediation: "Trap SIGTERM: stop accepting new work, let in-flight requests/jobs finish (with a bounded drain timeout), then exit. Ensure the orchestrator's shutdown grace period is longer than the drain timeout."
+
+  - id: INFRA-DEP-03
+    area: "Rolling or canary deploy, not big-bang"
+    question: "Does the deploy configuration replace instances gradually (rolling update, canary, blue/green) rather than stopping all old instances before starting new ones?"
+    severity: HIGH
+    kind: policy
+    hints:
+      - "Check orchestrator config (Compose, Nomad, Kubernetes, systemd unit + script) for update strategy settings"
+      - "Look for a deploy script that does 'stop all, then start all'"
+    remediation: "Configure a rolling update strategy with a minimum healthy count/percentage kept up during deploy. For single-instance/bare-VM setups, use a documented start-new-then-stop-old sequence (or accept and document the brief downtime as a deliberate tradeoff)."
+
+  - id: INFRA-DEP-04
+    area: "Rollback works after a migration ran"
+    question: "If this deploy includes a migration, is there a documented rollback path for the application code that still works against the post-migration schema?"
+    severity: CRITICAL
+    kind: rule
+    hints:
+      - "Cross-check with the migration's expand/contract status — rolling back code should not require rolling back an already-applied additive migration"
+    remediation: "Because expand/contract migrations are additive-first, the previous app version should keep working against the new schema. Document the rollback command/procedure explicitly rather than assuming it's obvious."
+
+  - id: INFRA-DEP-05
+    area: "Fail-fast config validation at startup"
+    question: "Does the service validate all required configuration/secrets at startup and refuse to start if something required is missing, rather than failing on the first request that needs it?"
+    severity: HIGH
+    kind: rule
+    hints:
+      - "Search for config/env loading code — does it validate presence/shape eagerly at boot, or lazily on first use"
+      - "Look for a required secret/env var that is only read inside a request handler with no startup check"
+    remediation: "Validate required configuration eagerly during startup/bootstrap, before the service reports itself healthy. Crash loudly with a clear error rather than serving traffic that will fail on the missing config."
+
+  - id: INFRA-DEP-06
+    area: "Resource limits set"
+    question: "Does the service have explicit CPU/memory limits (and requests, where the orchestrator supports them) rather than running unbounded?"
+    severity: MEDIUM
+    kind: policy
+    hints:
+      - "Check orchestrator manifests/job files for resource limit fields"
+    remediation: "Set explicit memory and CPU limits sized from observed usage plus headroom. An unbounded service can starve its neighbors or the host under a leak or traffic spike."
+
+  - id: INFRA-DEP-07
+    area: "Non-root container user"
+    question: "Does the container image run the application as a non-root user?"
+    severity: HIGH
+    kind: rule
+    hints:
+      - "Check Dockerfile for a USER directive"
+      - "Check if the base image's default user (often root) is left unchanged"
+    remediation: "Add a dedicated non-root user in the Dockerfile and switch to it with USER before the entrypoint/CMD."
+
+  - id: INFRA-DEP-08
+    area: "Minimal base image, no :latest"
+    question: "Does the image use a minimal/pinned base image and an explicit version tag (not :latest) for both the base image and any pulled dependency images?"
+    severity: MEDIUM
+    kind: rule
+    hints:
+      - "Search Dockerfile FROM lines and compose/orchestrator image references for ':latest' or missing tags"
+      - "Check base image choice (full OS image vs. slim/distroless/alpine) against actual runtime needs"
+    remediation: "Pin base and dependency images to a specific version (ideally by digest for reproducibility). Prefer a minimal base image that only carries what the runtime needs."
+
+  - id: INFRA-DEP-09
+    area: "Container healthcheck defined"
+    question: "Does the image/orchestrator config define a HEALTHCHECK (or orchestrator-native equivalent) so an unhealthy container is detected and replaced?"
+    severity: MEDIUM
+    kind: policy
+    hints:
+      - "Check Dockerfile for HEALTHCHECK, or orchestrator manifest for a health probe definition"
+    remediation: "Define a healthcheck that exercises the same logic as the readiness endpoint (see INFRA-DEP-01), so the orchestrator can restart/replace a wedged container automatically."
+
+  - id: INFRA-DEP-10
+    area: "Read-only filesystem where possible"
+    question: "Does the container run with a read-only root filesystem (with explicit writable mounts only where genuinely needed), rather than a fully writable filesystem by default?"
+    severity: LOW
+    kind: policy
+    hints:
+      - "Check orchestrator config for a read-only-root-filesystem setting"
+      - "Check what the app actually writes to disk (logs, temp files, uploads) and whether those paths are the only writable mounts"
+    remediation: "Enable read-only root filesystem and mount explicit writable volumes only for paths the app genuinely needs to write (e.g. /tmp, a cache dir)."
+
+  - id: INFRA-DEP-11
+    area: "No hidden single point of failure"
+    question: "For a service expected to scale or stay available, is there a single instance, single disk, or single dependency that the whole system silently depends on?"
+    severity: HIGH
+    kind: policy
+    hints:
+      - "Check for a service with replicas hardcoded to 1 outside of an explicitly singleton workload (e.g. a leader-elected job)"
+      - "Check for local-disk state in a service meant to be horizontally scaled (see INFRA-SCALE checklist for detail)"
+    remediation: "Identify the single point of failure and either make it redundant (replicate, add failover) or explicitly document it as an accepted risk with a stated blast radius."
+
+  - id: INFRA-DEP-12
+    area: "Backups exist and restore is tested"
+    question: "For stateful data this deploy touches, do backups exist and has a restore been actually tested (not just 'backup job runs successfully')?"
+    severity: CRITICAL
+    kind: policy
+    hints:
+      - "Look for a documented restore drill, date, and outcome"
+      - "A backup job existing with no evidence a restore was ever attempted is not sufficient"
+    remediation: "Schedule and document a periodic restore drill: restore a backup to a scratch environment and verify the data is usable. A backup nobody has restored is unverified."

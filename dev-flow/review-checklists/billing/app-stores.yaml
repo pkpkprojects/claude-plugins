@@ -1,0 +1,75 @@
+name: App store subscriptions (Apple App Store, Google Play)
+version: "2026.1"
+applies_when:
+  providers: [app_store, google_play]
+severity_default: HIGH
+
+# Store rules change often. Treat guideline numbers as pointers and verify the current text.
+
+checks:
+  - id: STORE-01
+    kind: rule
+    area: "Which purchases must use store billing"
+    question: "Are digital goods and features unlocked inside the mobile app sold through the store's in-app purchase system, unless a documented exception or entitlement applies (reader apps, region-specific external-purchase/link entitlements)?"
+    severity: CRITICAL
+    hints:
+      - "Apple App Review Guideline 3.1.1 / 3.1.3; Google Play Payments policy"
+      - "EU (DMA) and some other regions allow alternative payment or link-out under specific entitlements with their own fees and disclosure screens"
+      - "Physical goods and person-to-person services are not in scope of IAP"
+    remediation: "Decide per platform and region: IAP, alternative billing entitlement, or web-only purchase with no in-app steering. Document the decision."
+
+  - id: STORE-02
+    kind: rule
+    area: "Server-side validation and notifications"
+    question: "Is entitlement granted from server-side verification (App Store Server API / signed transactions, Google Play Developer API) and kept current via App Store Server Notifications v2 and Google Real-time Developer Notifications?"
+    severity: CRITICAL
+    hints:
+      - "Client-only receipt checks are forgeable"
+      - "Renewals, refunds, revocations, billing retry and grace period arrive only through notifications"
+    remediation: "Verify on the server, subscribe to store notifications, process them idempotently (BILL-20)."
+
+  - id: STORE-03
+    kind: rule
+    area: "One entitlement model across web and stores"
+    question: "Is there a single entitlement record per account fed by all sources (web provider, App Store, Google Play), with source recorded, so a user never pays twice and the app knows where the subscription is managed?"
+    severity: HIGH
+    hints:
+      - "A web subscription cannot be changed through the store and vice versa"
+      - "Show 'manage in App Store / Google Play / web' based on the source"
+    remediation: "Store entitlement with source and original transaction ID; block a second purchase while one source is active."
+
+  - id: STORE-04
+    kind: rule
+    area: "Store refunds and revocations"
+    question: "Do store refund/revocation notifications remove entitlement (and cancel any pending plan change) without issuing our own fiscal correction, since the store is the seller of record (STORE-07)?"
+    severity: HIGH
+    hints:
+      - "Stores can refund without asking the developer"
+    remediation: "Map REFUND/REVOKE notifications to entitlement removal; record them in revenue reporting only."
+
+  - id: STORE-05
+    kind: rule
+    area: "Required UI"
+    question: "Does the app offer 'Restore purchases', a link to manage subscriptions, and the store-required disclosure of price, period and auto-renewal next to the purchase button?"
+    severity: HIGH
+    hints:
+      - "Missing restore or disclosure is a frequent review rejection"
+    remediation: "Add restore, manage-subscription deep link and required disclosure text."
+
+  - id: STORE-06
+    kind: rule
+    area: "Store grace period vs our grace period"
+    question: "When store billing retry / grace period is enabled, does the backend follow the store's state instead of running its own dunning for store-sourced subscriptions?"
+    severity: MEDIUM
+    hints:
+      - "Two dunning systems on one subscription give contradictory access decisions"
+    remediation: "Use the store status as the source of truth for store subscriptions."
+
+  - id: STORE-07
+    kind: rule
+    area: "Fiscal documents for store sales"
+    question: "Is it documented that for store sales the store is the seller of record (it issues receipts and handles VAT), so the app does not issue its own invoice for them?"
+    severity: MEDIUM
+    hints:
+      - "Issuing a VAT invoice for a store sale duplicates the store's tax handling"
+    remediation: "Exclude store-sourced payments from fiscal invoicing; keep them in revenue reporting."

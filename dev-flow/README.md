@@ -2,7 +2,7 @@
 
 **Full development workflow orchestrator for Claude Code** -- from PRD to committed, reviewed code.
 
-dev-flow is a Claude Code plugin that manages the entire software development lifecycle through a team of 9 specialized AI agents. Give it a task description or PRD, and it will plan, design, implement, review, and deliver production-ready code -- all following TDD, security best practices, and legal compliance.
+dev-flow is a Claude Code plugin that manages the entire software development lifecycle through a team of 12 specialized AI agents. Give it a task description or PRD, and it will plan, design, implement, review, and deliver production-ready code -- all following TDD, security best practices, and legal compliance.
 
 ## How It Works
 
@@ -61,6 +61,9 @@ dev-flow is a Claude Code plugin that manages the entire software development li
 | **Implementer** | Sonnet | Strict TDD (RED-GREEN-REFACTOR). Builds features using design system components. |
 | **Security Reviewer** | Sonnet | Context-aware OWASP Top 10 review adapted to project type (CLI / web / API / mobile). |
 | **Legal Reviewer** | Sonnet | Hybrid compliance review (deterministic checklists + reasoning). Configurable per jurisdiction and sector. |
+| **Billing Reviewer** | Sonnet | Domain gate for money flows: entitlement only after payment, plan changes, dunning, exits, withdrawal mechanics, VAT/VIES/invoicing, webhook idempotency, Stripe / redirect-PSP / app-store pitfalls. Shares subscription checklists with the Legal Reviewer (each reports only the checks it owns). |
+| **Mobile Reviewer** | Sonnet | Domain gate for mobile apps (Flutter-first): offline sync and local DB migrations, fresh vs upgraded-install state, platform permissions, secure storage, release and store requirements. |
+| **Infra Reviewer** | Sonnet | Domain gate for deploy-affecting changes: expand/contract migrations, rollback, health checks, secrets handling, CI safety, on-prem-friendly design. |
 | **Acceptance Reviewer** | Sonnet | Configurable quality gate driven by `checks.yaml`. Verifies tests, code quality, and design system compliance. |
 | **Documentation Maintainer** | Sonnet | Maintains docs, Mermaid diagrams, and code comments, plus the `docs/solutions/` problem log and `docs/CONCEPTS.md` glossary. Runs after implementation (pipeline mode) or as standalone audit (`/dev-flow:docs-audit`). |
 | **PM** | Sonnet | Autonomous oversight -- detects stalls, suggests new checks, promotes recurring problems into skills, curates existing skills, flags stage-gate status, produces final verification report. |
@@ -210,6 +213,20 @@ Legal review runs automatically during planning (plan-level compliance check) an
 
 Compliance findings can be acknowledged with documented overrides in `config.yaml`.
 
+Selling subscriptions? Add `subscriptions` to `legal.extras` to load the EU withdrawal and Polish VAT/KSeF checklists. Checks there carry an `owner`: the Legal Reviewer judges the obligation (information, wording, notices), the Billing Reviewer judges the implementation (state, amounts, provider calls).
+
+## Domain Reviews
+
+Specialist reviewers that run only when a phase touches their paths (`domain_reviews.{domain}.triggers` in `config.yaml`), both on the plan and on each phase diff:
+
+| Domain | Checklists (`review-checklists/`) |
+|--------|-----------------------------------|
+| **billing** | provider-agnostic core, Stripe, redirect/bank-transfer PSPs (Przelewy24, BLIK, PayU, ...), App Store / Google Play |
+| **mobile** | core, Flutter, release |
+| **infra** | migrations, deploy, CI and secrets, observability and scalability |
+
+Checks are either `kind: rule` (correctness) or `kind: policy` (opinionated default, e.g. "cards only by default", "no per-seat limits"). Override either with a documented reason, same format as legal overrides.
+
 ## Integration with Superpowers
 
 dev-flow integrates with the [superpowers](https://github.com/obra/superpowers) plugin ecosystem:
@@ -227,13 +244,16 @@ dev-flow integrates with the [superpowers](https://github.com/obra/superpowers) 
 ```
 dev-flow/
 ├── .claude-plugin/
-│   └── plugin.json                 # Plugin manifest (v1.6.2)
-├── agents/                         # 9 specialized agent definitions
+│   └── plugin.json                 # Plugin manifest (v1.7.0)
+├── agents/                         # 12 specialized agent definitions
 │   ├── architect.md
 │   ├── ux-designer.md
 │   ├── implementer.md
 │   ├── security-reviewer.md
 │   ├── legal-reviewer.md
+│   ├── billing-reviewer.md
+│   ├── mobile-reviewer.md
+│   ├── infra-reviewer.md
 │   ├── acceptance-reviewer.md
 │   ├── documentation-maintainer.md
 │   ├── pm.md
@@ -251,10 +271,14 @@ dev-flow/
 │   └── approval-gate.sh            # PreToolUse gate for protected paths/commands (opt-in)
 ├── compliance/
 │   ├── checklists/                 # Legal compliance checklists
-│   │   ├── eu/                     # GDPR, ePrivacy, EAA, AI Act, DSA
-│   │   ├── pl/                     # RODO, consumer rights, e-commerce
+│   │   ├── eu/                     # GDPR, ePrivacy, EAA, AI Act, DSA, subscriptions
+│   │   ├── pl/                     # RODO, consumer rights, e-commerce, VAT/KSeF invoicing
 │   │   └── sectors/                # Medical, financial
 │   └── templates/                  # Privacy policy & ToS templates
+├── review-checklists/              # Domain review checklists
+│   ├── billing/                    # core, stripe, redirect-psp, app-stores
+│   ├── mobile/
+│   └── infra/
 ├── templates/pipeline-config/      # Per-stack config templates
 └── test/evals/                     # Evaluation scenarios
 ```

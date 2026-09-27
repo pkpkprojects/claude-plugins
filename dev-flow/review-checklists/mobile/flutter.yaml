@@ -1,0 +1,138 @@
+name: Flutter Platform & Performance
+version: "1.0"
+applies_when:
+  stack: [flutter]
+severity_default: MEDIUM
+
+checks:
+  - id: MOB-FLT-01
+    area: "iOS permission usage strings"
+    question: "Does every permission requested (camera, location, photos, microphone, bluetooth, etc.) have a specific, honest NSUsageDescription string in Info.plist?"
+    severity: CRITICAL
+    kind: rule
+    hints:
+      - "Grep ios/Runner/Info.plist for NS*UsageDescription keys"
+      - "Cross-check against permission_handler / camera / geolocator packages used in pubspec.yaml"
+      - "A generic string like 'App needs access' is an App Review rejection risk"
+    remediation: "Add a specific NSUsageDescription for every requested permission explaining exactly why the app needs it."
+
+  - id: MOB-FLT-02
+    area: "Android 13+ notification permission"
+    question: "Does the app request POST_NOTIFICATIONS at runtime on Android 13+ before showing local/push notifications, instead of assuming it's granted?"
+    severity: HIGH
+    kind: rule
+    hints:
+      - "Grep AndroidManifest.xml for POST_NOTIFICATIONS"
+      - "Search for a runtime permission request call before first notification is scheduled/shown"
+    remediation: "Request POST_NOTIFICATIONS at runtime on Android 13+ (API 33+) before the first notification, and handle denial gracefully."
+
+  - id: MOB-FLT-03
+    area: "Background execution limits"
+    question: "Does background work (sync, location tracking, uploads) account for OS background execution limits instead of assuming indefinite background run time?"
+    severity: HIGH
+    kind: policy
+    hints:
+      - "Look for WorkManager/background_fetch/flutter_background_service usage vs raw long-running Timer/Isolate expected to survive backgrounding"
+      - "Check iOS background modes declared in Info.plist match what's actually used"
+    remediation: "Use WorkManager (Android) / BGTaskScheduler equivalents (iOS) for deferred/background work, and design sync to resume correctly if the OS kills the process mid-task."
+
+  - id: MOB-FLT-04
+    area: "Deep link / universal link verification"
+    question: "Are deep links (App Links on Android, Universal Links on iOS) domain-verified via assetlinks.json / apple-app-site-association, not just intent-filters that accept any host?"
+    severity: HIGH
+    kind: rule
+    hints:
+      - "Check for android:autoVerify=\"true\" on the intent-filter and a matching .well-known/assetlinks.json on the domain"
+      - "Check for the apple-app-site-association file and associated domains entitlement"
+      - "Unverified deep links can be hijacked by other apps or used for phishing-style deep-link spoofing"
+    remediation: "Enable autoVerify on Android intent-filters and publish assetlinks.json; add the associated domains entitlement and apple-app-site-association on iOS."
+
+  - id: MOB-FLT-05
+    area: "16 KB page size support (Android)"
+    question: "Do bundled native libraries (.so files, including from third-party plugins) support 16 KB memory page sizes for newer Android devices?"
+    severity: HIGH
+    kind: rule
+    hints:
+      - "Check NDK/AGP version and whether any prebuilt .so in plugins predates 16KB-aligned builds"
+      - "Google Play requires 16 KB page size support for apps targeting newer Android API levels"
+    remediation: "Update NDK/AGP to a version that aligns native libraries to 16 KB pages, and update or replace plugins shipping outdated prebuilt .so files."
+
+  - id: MOB-FLT-06
+    area: "Min/target SDK policy deadlines"
+    question: "Do minSdkVersion/targetSdkVersion (Android) and the iOS deployment target meet the current store policy minimums, with a tracked deadline for the next required bump?"
+    severity: MEDIUM
+    kind: policy
+    hints:
+      - "Check android/app/build.gradle for targetSdkVersion vs the current Play targetSdk requirement"
+      - "Check ios/Podfile / project deployment target"
+    remediation: "Bump targetSdkVersion/deployment target ahead of the store's enforcement deadline; track the deadline explicitly rather than reacting to a rejection."
+
+  - id: MOB-FLT-07
+    area: "iOS privacy manifest & required-reason APIs"
+    question: "Does the app (and its SDKs) ship a PrivacyInfo.xcprivacy declaring required-reason API usage (UserDefaults, file timestamp APIs, disk space, etc.)?"
+    severity: CRITICAL
+    kind: rule
+    hints:
+      - "Grep for PrivacyInfo.xcprivacy in ios/Runner and in third-party plugin pods"
+      - "Check for usage of required-reason APIs (e.g. NSUserDefaults, system boot time) without a declared reason"
+    remediation: "Add/update PrivacyInfo.xcprivacy declaring each required-reason API category used, including by bundled third-party SDKs."
+
+  - id: MOB-FLT-08
+    area: "App Tracking Transparency"
+    question: "If the app tracks users across apps/websites for advertising (or bundles an SDK that does), does it request ATT permission before tracking?"
+    severity: CRITICAL
+    kind: rule
+    hints:
+      - "Search for IDFA access, ad SDKs, or attribution SDKs"
+      - "Check for app_tracking_transparency plugin usage and a request before any tracking-related network call"
+    remediation: "Request ATT authorization before any cross-app/cross-site tracking or IDFA access; do not track without an authorized status."
+
+  - id: MOB-FLT-09
+    area: "Accessibility semantics"
+    question: "Do custom widgets (canvas/CustomPaint-based UI, icon-only buttons, custom sliders) expose Semantics labels for screen readers?"
+    severity: MEDIUM
+    kind: rule
+    hints:
+      - "Search for CustomPaint/GestureDetector widgets without a wrapping Semantics widget"
+      - "Search for IconButton/InkWell with no tooltip/semanticLabel"
+    remediation: "Wrap custom interactive widgets in Semantics with a clear label, and set tooltip/semanticLabel on icon-only controls."
+
+  - id: MOB-FLT-10
+    area: "Dynamic type / text scale"
+    question: "Does the layout tolerate the OS text-scale setting (larger accessibility font sizes) without clipping or overlapping text?"
+    severity: MEDIUM
+    kind: policy
+    hints:
+      - "Search for hardcoded fixed-height containers wrapping Text widgets"
+      - "Search for MediaQuery textScaler overrides that lock text scale to 1.0"
+    remediation: "Avoid fixed-height containers around text; test key screens at the largest supported text scale factor."
+
+  - id: MOB-FLT-11
+    area: "Touch target size"
+    question: "Are interactive controls at least 44x44pt (iOS) / 48x48dp (Android)?"
+    severity: LOW
+    kind: policy
+    hints:
+      - "Search for small custom icon buttons or GestureDetector regions sized below the minimum"
+    remediation: "Ensure tappable controls have a minimum hit area of 44x44pt / 48x48dp, using padding if the visual icon is smaller."
+
+  - id: MOB-FLT-12
+    area: "Rebuild / jank hotspots"
+    question: "Do list/grid views and frequently-updated widgets avoid unnecessary rebuilds (missing const, no RepaintBoundary, setState at a too-high widget level)?"
+    severity: MEDIUM
+    kind: policy
+    hints:
+      - "Search for setState called high in the tree wrapping large subtrees"
+      - "Check ListView.builder vs ListView(children: ...) for large lists"
+      - "Check for missing const constructors on static widgets"
+    remediation: "Use const constructors where possible, scope setState/state listeners to the smallest widget needed, and use ListView.builder for long lists."
+
+  - id: MOB-FLT-13
+    area: "Image caching and app size"
+    question: "Are remote images cached (not re-fetched every rebuild/scroll) and are bundled asset images appropriately sized/compressed for their display resolution?"
+    severity: LOW
+    kind: policy
+    hints:
+      - "Search for Image.network without a caching package (cached_network_image) or manual cache"
+      - "Check asset image dimensions against actual on-screen display size"
+    remediation: "Use a caching image loader for network images; downscale/compress bundled assets to their actual display resolution."

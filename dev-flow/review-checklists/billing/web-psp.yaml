@@ -1,0 +1,115 @@
+name: Subscription billing on a web payment provider
+version: "2026.1"
+# App-store sales are excluded: the store is the seller of record and runs its own
+# payment, tax and customer identity (see app-stores.yaml).
+applies_when:
+  providers_exclude: [app_store, google_play]   # applies when any configured provider is not a store
+severity_default: HIGH
+
+checks:
+  - id: BILL-20
+    kind: rule
+    area: "Webhook processing is idempotent and retry-safe"
+    question: "Are webhooks signature-verified, claimed atomically (INSERT ... ON CONFLICT DO NOTHING RETURNING or row lock), marked processed only on success, with stale claims recoverable and handlers safe for out-of-order delivery?"
+    severity: CRITICAL
+    hints:
+      - "Bug: processed=true set even after a handler error, so the provider's retry is skipped forever"
+      - "Bug: separate 'check processed' and 'mark processed' steps; two concurrent deliveries both run"
+      - "Proof requires a real database with real concurrency; mocks cannot prove absence of a race"
+    remediation: "Atomic claim, success-only completion, error recorded separately, stale-claim recovery, concurrency test on a real DB."
+
+  - id: BILL-21
+    kind: rule
+    area: "Provider customer identity"
+    question: "Is the provider customer always reused by the stored ID (never looked up by email), created with an idempotency key per account, and protected by a partial unique index?"
+    severity: CRITICAL
+    hints:
+      - "Email lookup merges two accounts sharing a billing email (agencies, resellers: this is the main use case, not an edge case)"
+      - "Privacy purge must null the stored provider ID too"
+    remediation: "Delete the email lookup path, use customer:<accountId> idempotency keys and a unique index WHERE provider_customer_id IS NOT NULL."
+
+  - id: BILL-22
+    kind: rule
+    area: "No double subscription"
+    question: "Is checkout refused when the account already has a live paid subscription, protected by an idempotency key and short session expiry, with a webhook safety net cancelling a duplicate?"
+    severity: CRITICAL
+    hints:
+      - "Double click, two tabs, client retry"
+      - "Safety net: two active subscriptions -> cancel the newer and notify the operator (IDs only)"
+    remediation: "Guard + idempotency + safety net."
+
+  - id: BILL-23
+    kind: rule
+    area: "Idempotency key covers every varying parameter"
+    question: "Does the checkout idempotency key include every parameter that can differ between two attempts (quantities, price IDs, tax rate IDs), not only account/plan/period?"
+    severity: HIGH
+    hints:
+      - "Providers compare the fingerprint of ALL parameters; rotating an immutable object (new price or tax rate) changes a parameter and the retry fails with an idempotency error"
+      - "On every change that rotates a provider object used in checkout, check whether its ID is part of the key"
+    remediation: "Derive the key from a hash of all session parameters."
+
+  - id: BILL-24
+    kind: rule
+    area: "Money arithmetic"
+    question: "Are amounts integer minor units (no floats on the money path), with VAT computed per invoice line using half-up rounding, and multi-line/proration totals taken from the provider?"
+    severity: CRITICAL
+    hints:
+      - "3 x 4.99 is one line: VAT 344, not 3 x 115 = 345"
+      - "Providers may round VAT on the net sum per rate and push the cent difference to the largest line; compare invoice totals, not lines"
+    remediation: "Use int64 minor units; own calculator only for single-line quotes; provider totals for everything else."
+
+  - id: BILL-25
+    kind: rule
+    area: "Provider is the source of truth for charged amounts"
+    question: "After payment, are net and gross stored from the provider invoice (net = total excluding tax, gross = total; amount_paid is not gross because it excludes customer balance), with a mismatch against our calculator logged as ERROR?"
+    severity: HIGH
+    hints:
+      - "The mismatch alert is useful only if it does not fire routinely"
+    remediation: "Persist provider totals; alert on divergence."
+
+  - id: BILL-26
+    kind: rule
+    area: "Tax configuration is a startup gate"
+    question: "Does the service refuse to start when selling is enabled but a required tax rate/config is missing, with a test that reads the shipped prod/staging config (not a fixture)?"
+    severity: CRITICAL
+    hints:
+      - "Otherwise checkout correctly refuses and nobody notices until a real customer (or the owner) tries to pay"
+    remediation: "Validate tax config at boot; fail the deploy, not the first customer."
+
+  - id: BILL-27
+    kind: rule
+    area: "Legacy purchase paths"
+    question: "Is every endpoint that can create a subscription going through consent and tax-rate resolution, with old paths disabled (410) rather than patched?"
+    severity: CRITICAL
+    hints:
+      - "Any path bypassing consent and tax sells at 0% VAT"
+    remediation: "Inventory subscription-creating endpoints; retire the legacy ones."
+
+  - id: BILL-28
+    kind: rule
+    area: "Tax rate follows the customer after checkout"
+    question: "When VAT status or billing profile changes after purchase, is the rate on the subscription updated, and is it confirmed before every charge (draft window for cycle invoices, in the same call for immediate changes)?"
+    severity: CRITICAL
+    hints:
+      - "With net prices the rate changes the charged amount, not only a label"
+      - "Cycle renewals usually have a draft window before finalization; immediate plan changes finalize instantly, so a webhook is too late"
+      - "There is no 'fix it afterwards' path: afterwards only a correction invoice exists"
+    remediation: "Resolve the rate before any call that can charge; for cycle invoices correct the draft on the created event and log ERROR when a correction was needed."
+
+  - id: BILL-31
+    kind: rule
+    area: "Reconciliation"
+    question: "Is there a periodic reconciliation comparing provider payouts/charges with the local ledger and alerting on differences?"
+    severity: MEDIUM
+    hints:
+      - "Look for a scheduled job or query joining provider balance transactions with local payments"
+    remediation: "Add a daily reconciliation job with an alert on mismatch."
+
+  - id: BILL-32
+    kind: rule
+    area: "PCI scope"
+    question: "Is card data collected only by the provider's hosted page or elements, so raw PAN never touches our servers or logs?"
+    severity: CRITICAL
+    hints:
+      - "Search for card number fields posted to our API, or card data in logs"
+    remediation: "Use hosted checkout/elements; keep the app in the lightest PCI self-assessment scope."
