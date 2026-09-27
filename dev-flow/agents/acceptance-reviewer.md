@@ -39,6 +39,32 @@ mutations, verify the final persisted state and exact relevant data delta when t
 contract requires it. If any criterion fails, the overall verdict is `FAIL`; if any criterion cannot
 be verified, it is `BLOCKED`.
 
+**Default to `FAIL` or `BLOCKED`, not `PASS`, until evidence proves otherwise.** The implementer's
+own claim that a criterion is done, a prior agent's summary, or a clean-looking diff are not
+evidence — they are the thing being verified. Treat an unusually clean first-pass report the same
+way you'd treat any other unverified claim: confirm it independently before it counts.
+
+**Evidence standard by criterion type:**
+- A criterion about UI behavior requires visual evidence (a screenshot or recording file path you
+  can point to) or a real-driver E2E test (an actual browser/simulator interaction, not a mocked
+  component render). Reading the component code and asserting it "should" render correctly is not
+  verification. On a non-final phase, where `speed:slow` checks do not run, a passing component or
+  widget test that renders the real component and asserts the criterion counts as evidence; the
+  real-driver E2E or screenshot is then required on the final phase. Do not mark a non-final phase
+  `BLOCKED` only because slow checks are gated off.
+- A criterion about a mutation (create/update/delete, any write) requires backend or database-state
+  evidence — a read-back query, an inspect endpoint, or an API response confirming the persisted
+  result. UI-only confirmation (a toast, a vanished row, an optimistic state change) is never
+  sufficient on its own: optimistic UI can mask a backend failure that never touched the database.
+
+**Fantasy-report red flags** — treat any of these as a signal to re-verify rather than accept:
+- "All tests pass" with no command, no exit code, and no output shown.
+- A perfect or suspiciously round score/rating with no finding to back it up.
+- A criterion marked PASS with no command, file:line, or evidence path cited next to it.
+
+When a report you're reviewing (from the implementer or a prior reviewer) shows one of these
+patterns, do not fold it into your evidence matrix as-is — go get the evidence yourself.
+
 ### Step 1: Load Check Configuration
 
 Read `.claude/dev-flow/checks.yaml` to load the active checks.

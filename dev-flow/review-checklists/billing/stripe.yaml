@@ -1,0 +1,118 @@
+name: Stripe-specific billing pitfalls
+version: "2026.1"
+applies_when:
+  providers: [stripe]
+severity_default: HIGH
+
+checks:
+  - id: STRIPE-01
+    kind: rule
+    area: "checkout.session.completed proves nothing about money"
+    question: "Is entitlement granted on invoice.paid (or payment_intent.succeeded for one-off), not on checkout.session.completed?"
+    severity: CRITICAL
+    hints:
+      - "Session completes for async methods and pending 3DS"
+    remediation: "Grant on invoice.paid; see BILL-01."
+
+  - id: STRIPE-02
+    kind: rule
+    area: "Immutable objects are rotated, not edited"
+    question: "When TaxRate.inclusive, Price.tax_behavior or Price.usage_type must change, are new objects created and old ones archived only after the new code is deployed?"
+    severity: HIGH
+    hints:
+      - "These fields are immutable; 0% rates behave the same in both modes"
+      - "Rotation changes IDs used in checkout -> see BILL-23"
+    remediation: "Create new objects, deploy, then archive old ones."
+
+  - id: STRIPE-03
+    kind: rule
+    area: "Subscription schedules drop the tax rate"
+    question: "When using subscription_schedules, does every phase sent on update carry default_tax_rates explicitly?"
+    severity: CRITICAL
+    hints:
+      - "Phase without tax rates -> after transition default_tax_rates = [] and every following invoice has no VAT"
+    remediation: "Set tax rates on every phase; assert non-empty default_tax_rates after a phase transition in E2E."
+
+  - id: STRIPE-04
+    kind: rule
+    area: "Two moments to fix the rate"
+    question: "For billing_reason=subscription_cycle, is the rate corrected on invoice.created while the draft is open; for billing_reason=subscription_update, is the rate set in the same API call that changes the subscription (and in the preview shown to the user)?"
+    severity: CRITICAL
+    hints:
+      - "Update invoices are finalized at creation (created == finalized_at); invoice.created arrives too late"
+    remediation: "Handle both paths; log ERROR when a draft needed correction."
+
+  - id: STRIPE-05
+    kind: rule
+    area: "Reverse charge carried on the invoice line"
+    question: "Is reverse charge implemented as a dedicated exclusive 0% TaxRate named for the mechanism on the invoice line (technical carrier of the annotation), not via customer.tax_exempt, and does the fiscal invoice show the reverse-charge annotation rather than a 0% VAT rate?"
+    severity: HIGH
+    hints:
+      - "tax_exempt has only none/exempt/reverse; 'reverse' means EU B2B reverse charge (art. 196 of the VAT Directive) and is wrong for non-EU B2B"
+    remediation: "Use a 0% TaxRate per mechanism with the correct annotation."
+
+  - id: STRIPE-06
+    kind: rule
+    area: "customer.tax_exempt=reverse zeroes VAT"
+    question: "If the code ever sets customer.tax_exempt, does every place that re-resolves the VAT mechanism update BOTH the customer's tax_exempt and the subscription/invoice rate, customer first?"
+    severity: CRITICAL
+    hints:
+      - "Verified behaviour: tax_exempt=reverse overrides a correct exclusive 23% line rate -> tax 0, total = net"
+      - "Fixing only the visible rate while leaving the old flag = silent VAT shortfall"
+    remediation: "Prefer never setting tax_exempt. Otherwise sync customer then rate in one function used everywhere."
+
+  - id: STRIPE-07
+    kind: rule
+    area: "Read the VAT mechanism from invoice lines"
+    question: "Is the VAT mechanism derived from the tax rate IDs on the Stripe invoice lines (reverse map rate -> mechanism), not by matching a local draft on timestamps?"
+    severity: HIGH
+    hints:
+      - "Local timestamps have nanosecond precision, Stripe uses seconds: exact period_start matching almost never succeeds"
+    remediation: "Build a reverse map from txr_ IDs and read it on invoice.created / invoice.paid."
+
+  - id: STRIPE-08
+    kind: rule
+    area: "Metered usage with aggregate=last"
+    question: "With metered prices using aggregation 'last', is usage reported periodically (e.g. daily) and at checkout, not only on changes?"
+    severity: HIGH
+    hints:
+      - "A period without changes bills 0"
+    remediation: "Add a scheduled usage report."
+
+  - id: STRIPE-09
+    kind: rule
+    area: "Billing anchor on upgrade"
+    question: "Is it a deliberate decision whether an upgrade resets billing_cycle_anchor, and do the price preview and the real update use identical billing_cycle_anchor / proration_date?"
+    severity: HIGH
+    hints:
+      - "always_invoice alone does NOT reset the anchor; proration covers only until the old period end, so a renewal can land inside the new withdrawal window"
+      - "Shown amount != charged amount when preview and update differ"
+    remediation: "Decide on anchor reset, apply it identically in preview and update, and store previous_period_end (see EUSUB-08)."
+
+  - id: STRIPE-10
+    kind: rule
+    area: "Customer Portal configuration"
+    question: "Is a dedicated Billing Portal configuration used that allows payment-method updates only (no address/tax-ID edits, no subscription change/cancel, no Stripe invoice history when Stripe is not the fiscal source)?"
+    severity: HIGH
+    hints:
+      - "Defaults let customers bypass consent, VAT validation and audit"
+      - "Create the configuration once with a script, store its ID in config"
+    remediation: "Create a restrictive portal configuration and pass its ID when creating portal sessions."
+
+  - id: STRIPE-11
+    kind: rule
+    area: "Totals"
+    question: "Is gross taken from invoice.total and net from total_excluding_tax, never from amount_paid?"
+    severity: HIGH
+    hints:
+      - "amount_paid excludes applied customer balance"
+    remediation: "See BILL-25."
+
+  - id: STRIPE-12
+    kind: rule
+    area: "Invoice emails vs fiscal source"
+    question: "When Stripe is not the fiscal invoice source, are Stripe's automatic invoice/receipt emails configured so they never present the Stripe document as an invoice?"
+    severity: HIGH
+    hints:
+      - "See PLVAT-07"
+    remediation: "Disable or relabel Stripe invoice emails for affected customers."

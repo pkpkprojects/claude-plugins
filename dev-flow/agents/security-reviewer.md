@@ -97,6 +97,19 @@ Use `Grep` and `Read` to systematically scan for:
 - **Race conditions:** TOCTOU (time-of-check-time-of-use) vulnerabilities, unsynchronized access to shared resources
 - **SSRF:** Server-side requests using user-controlled URLs without allowlist validation
 
+#### AI-Assistant Default Defects (Check Every Time, Every Project Type)
+
+Coding assistants ship a predictable set of shortcuts to make the demo work. Check for every one of these, and cite the CWE in the finding:
+
+- **Hardcoded secrets that reach a client bundle:** a key inlined "just to test," or hidden behind a client-exposed env prefix (`NEXT_PUBLIC_`, `VITE_`, `PUBLIC_`, `EXPO_PUBLIC_`) that ships it to every browser. (CWE-798) Do not flag publishable/anon keys that are designed to be public — check what the key actually grants before flagging it.
+- **Partial authorization on a resource:** an endpoint gained an auth check on the verb touched by the diff (e.g. `PATCH`) while sibling verbs on the same resource (`GET`, `DELETE`, list endpoints) stayed open. Enumerate every route for the resource, not just the one in the diff. (CWE-862)
+- **Broken row-level/tenant isolation (IDOR):** a query scoped by a client-supplied id without also checking that the id belongs to the requesting user/tenant; a database policy or middleware that "looks enabled" but resolves to allow-all (e.g. `USING (true)`, a missing tenant filter). (CWE-639 / CWE-863)
+- **Trusting client-supplied privileged fields:** role, price, owner, tier, or permission fields read directly from the request body/JWT claims a client can edit, instead of being derived server-side. (CWE-602)
+- **Prompt-injection sinks:** untrusted text (user input, fetched documents, tool output) concatenated into a system prompt or model output routed unvalidated into a tool call, SQL query, shell command, or raw HTML render. (CWE-1427 for the injection point, CWE-1426 when model output reaches the sink unvalidated; tag the sink itself with CWE-89/CWE-78/CWE-79 as applicable)
+- **Permissive CORS:** wildcard origin (`Access-Control-Allow-Origin: *`) combined with `Access-Control-Allow-Credentials: true`, or an origin reflection with no allowlist. (CWE-942)
+- **Debug endpoints left on:** `/debug`, `/__test`, admin/diagnostic routes, or verbose stack-trace pages reachable without an environment guard. (CWE-489)
+- **Verbose error leaks:** raw exception messages, stack traces, or internal paths/queries returned in API responses instead of a generic message. (CWE-209)
+
 ### Step 5: Assess Each Finding
 
 For each potential finding, evaluate:
@@ -159,6 +172,25 @@ For each potential finding, evaluate:
 
 - **PASS:** Zero CRITICAL or HIGH findings. Medium/Low/Info findings are noted but do not block.
 - **FAIL:** One or more CRITICAL or HIGH findings exist. The implementer must fix these before proceeding.
+
+## Re-Review: Scan, Fix, Rescan
+
+A re-review after the implementer's fix is not "read the new diff and check the finding looks addressed." Re-run the *same* searches/greps used to surface the original findings and confirm each one is actually gone from the codebase, not just absent from the lines that changed:
+
+1. For each prior finding, re-run the pattern or check that found it originally.
+2. Mark it **resolved** only if that re-run comes back clean.
+3. Mark it **still present** if it comes back positive anywhere — including a spot the diff didn't touch.
+4. Flag anything the re-run surfaces that wasn't in the prior report as a **new finding**, not folded into an old one.
+
+A finding is not closed because the implementer says they fixed it. It is closed because the scan that found it no longer finds it.
+
+## Secrets Lifecycle
+
+Finding a hardcoded secret is not the end of the review — removing it from the current diff is not remediation:
+
+- **A leaked secret is already burned.** Anything committed — even briefly, even in a since-reverted commit — must be rotated at the provider. Removing the line from source without rotating leaves the old value live and exploitable; call this out explicitly in the finding, not as an aside.
+- **`.env`-style example files count.** `.env.example`, `.env.sample`, or similar files with real-looking (not obviously placeholder) values are a leak risk on their own — flag them even though they're "just an example."
+- **Secrets in logs are secrets in the open.** A key or token echoed into application logs, CI output, or error messages is exposed the same as one hardcoded in source — check log statements and error handlers, not just variable assignments.
 
 ## Important Rules
 

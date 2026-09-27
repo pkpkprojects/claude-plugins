@@ -50,7 +50,7 @@ The user invokes dev-flow with either a file path or inline text. Your first job
 
 ### Step 1.2b: Detect Legal Review Override
 
-During input parsing, scan `TASK_TEXT` for a `legal_review: false` directive. If found, store `LEGAL_REVIEW_ENABLED = false`; otherwise default to `true`. This flag can appear as YAML frontmatter in the PRD or as an inline directive anywhere in the task text. Steps 3.5b and 5c.5 check this flag to skip legal review when disabled.
+During input parsing, scan `TASK_TEXT` for a `legal_review: false` directive. If found, store `LEGAL_REVIEW_ENABLED = false`; otherwise default to `true`. This flag can appear as YAML frontmatter in the PRD or as an inline directive anywhere in the task text. Steps 3.5c and 5c.5 check this flag to skip legal review when disabled.
 
 ### Step 1.3: Detect Project Context
 
@@ -153,6 +153,15 @@ agents:
   legal-reviewer:
     model: "sonnet"
     extra_instructions: ""
+  billing-reviewer:
+    model: "sonnet"
+    extra_instructions: ""
+  mobile-reviewer:
+    model: "sonnet"
+    extra_instructions: ""
+  infra-reviewer:
+    model: "sonnet"
+    extra_instructions: ""
   pm:
     model: "sonnet"
     extra_instructions: ""
@@ -196,6 +205,50 @@ Compute one canonical gate and reuse it everywhere:
 `LEGAL_REVIEW_APPLIES = LEGAL_CONFIG is not null AND TASK_TEXT is not tagged hotfix or refactor AND LEGAL_REVIEW_ENABLED is true`.
 
 Do not reimplement this predicate in task creation, plan review, code review, or re-review.
+
+### Step 2.3b: Load Domain Review Configuration
+
+Domain reviewers are specialist gates that run only when a change touches their area. Supported
+domains and their agents:
+
+| Domain | Agent (`subagent_type`) | Checklists |
+|--------|-------------------------|------------|
+| `billing` | `dev-flow:billing-reviewer` | `dev-flow/review-checklists/billing/*.yaml` + shared legal checklists with `extras: [subscriptions]` |
+| `mobile` | `dev-flow:mobile-reviewer` | `dev-flow/review-checklists/mobile/*.yaml` |
+| `infra` | `dev-flow:infra-reviewer` | `dev-flow/review-checklists/infra/*.yaml` |
+
+1. Read `RESOLVED_CONFIG.domain_reviews`. Absent section = no domain reviews. For each domain with
+   `enabled: true`, read `triggers` (path globs), `overrides`, `extra_instructions`,
+   `enforce_policies` (default `false`), and the domain-specific selectors (`providers` for billing,
+   `project.stack` for mobile).
+2. Load that domain's checklists. A checklist matches when every key in its `applies_when` is
+   satisfied: `providers` ∩ configured providers is non-empty; `providers_exclude` — at least one
+   configured provider is outside the list (so an unknown web provider still gets these checks), and
+   a missing or empty `providers` list counts as an unknown web provider (warn the user once);
+   `stack` ∩ `project.stack` (a string or a list) is non-empty; `{}` always matches.
+3. For `billing`, load the shared subscription checklists **directly**, independent of `legal.extras`
+   and of `LEGAL_REVIEW_APPLIES`: every `.yaml` in `dev-flow/compliance/checklists/{code}/` whose
+   `applies_when.extras` contains `subscriptions`, for each `code` in the **union** of
+   `domain_reviews.billing.jurisdictions` and `legal.jurisdictions` (lowercased codes), so billing
+   covers at least every shared checklist the legal reviewer would load.
+   If a configured provider matches no provider-specific checklist in `review-checklists/billing/`,
+   warn the user once that only the provider-agnostic checks will run for it.
+   Billing-reviewer reports their `owner: billing` checks. If billing is enabled and neither list
+   exists, warn the user once: shared EU/PL subscription checks will not run.
+4. Store as `DOMAIN_REVIEWS = {domain: {agent, config, checklists}}`.
+
+**Policy enforcement.** Checks with `kind: policy` are opinionated defaults. With
+`enforce_policies: false` a reviewer reports a policy finding at most as `HIGH` (never blocking) and
+lists it under "Decisions needed"; with `true` it keeps the check's own severity, so a project that
+adopted the defaults as its rules gets them enforced. `kind: rule` checks always keep their severity.
+
+A domain **applies to a phase** when any file in the phase's `files_to_touch` **or** in the phase's
+actual diff (whole phase so far, fixes included) matches one of the domain's `triggers`. Compute this
+with one helper, `domain_applies(domain, phase)`, always over that union, and reuse it in task
+creation, code review and re-review. Before any diff exists (plan review, consult) the union is just
+the planned paths. A planned domain therefore never loses its review because the implementer put the
+change in an unexpected file. Hotfix and refactor tasks do not skip domain reviews: billing, mobile
+and infra defects ship through hotfixes too.
 
 ### Step 2.4: Monorepo Configuration Inheritance
 
@@ -275,6 +328,31 @@ The architect will return an analysis containing:
 - Architectural considerations
 - Questions for the user (trade-offs, ambiguities, scope decisions)
 - Proposed approaches (2-3 options with trade-offs)
+- **Affected areas**: likely touched paths and whether the task involves UI, money/subscriptions,
+  mobile, or deploy/infra
+
+### Step 3.2b: Specialist Consult (Conditional)
+
+The architect must not design money flows, mobile sync or user journeys alone and learn about the
+constraints only in plan review. Before any question reaches the user, consult the specialists once.
+
+**Entry condition:** the architect's affected areas match a domain in `DOMAIN_REVIEWS`
+(`domain_applies` over the listed paths, or the area named explicitly), or the task involves UI.
+
+1. Dispatch in parallel, one-shot (no task claiming):
+   - each matching domain reviewer, `name: "{domain}-consult"`, told to use **Mode 0: Consult**, with
+     `TASK_TEXT`, the architect's full analysis, the domain config and its checklists;
+   - `dev-flow:ux-designer`, `name: "ux-consult"`, when UI is involved, told to use **Consult Mode**,
+     with `TASK_TEXT`, the architect's analysis, and the existing personas/design-system inventory.
+2. Wait for all of them. Store the outputs as `SPECIALIST_CONSULTS` (internal).
+3. Merge into Step 3.3: the architect's questions first, then each specialist's "Decisions needed
+   from the owner", deduplicated and labelled by source. Specialist objections to a proposed
+   approach are shown next to that approach.
+4. Pass `SPECIALIST_CONSULTS` in full to the architect in Step 3.4, so the plan is written with the
+   constraints already in it. The domain plan reviews in Step 3.5b then verify instead of redesign.
+
+One round only. If a specialist raises something that needs the architect's answer rather than the
+user's, the architect answers it in the plan (Step 3.4); do not start an agent-to-agent chat.
 
 ### Step 3.3: Present Questions to User
 
@@ -300,7 +378,9 @@ Send the user's answers back to the architect agent. Dispatch a **new agent** th
 1. The original TASK_TEXT
 2. The architect's initial analysis
 3. The user's answers
-4. Instruction: "Based on the user's answers, produce the final implementation plan."
+4. `SPECIALIST_CONSULTS` from Step 3.2b (when present), verbatim
+5. Instruction: "Based on the user's answers and the specialist constraints, produce the final
+   implementation plan. Every constraint you do not follow needs a one-line reason in the plan."
 
 ### Step 3.5: Receive Implementation Plan
 
@@ -336,7 +416,7 @@ example checklist.
 
 Store its full output as `SECURITY_REVIEW`.
 
-- On `PASS`, continue to legal review.
+- On `PASS`, continue to Step 3.5b (domain plan reviews), then Step 3.5c (legal plan review).
 - On `NEEDS REVISION` or `FAIL`, dispatch a fresh architect with the current `ARCHITECT_PLAN` and the
   security findings. Replace `ARCHITECT_PLAN` with the revision, parse its phases again, and repeat
   this security review.
@@ -345,7 +425,31 @@ Store its full output as `SECURITY_REVIEW`.
 Never present an internal review as the plan. Never claim security passed unless the most recent
 `ARCHITECT_PLAN` received an explicit `PASS` from this step.
 
-### Step 3.5b: Legal Plan Review (Conditional)
+### Step 3.5b: Domain Plan Reviews (Conditional)
+
+**Entry condition:** at least one domain in `DOMAIN_REVIEWS` applies to at least one plan phase
+(`domain_applies` over that phase's `files_to_touch`).
+
+1. For each applicable domain, dispatch a **fresh one-shot agent** in parallel (they do not claim
+   tasks):
+
+   ```
+   Tool: Agent
+   subagent_type: {DOMAIN_REVIEWS[domain].agent}
+   name: "{domain}-plan-review"
+   ```
+
+   Prompt inline: role ("Use Mode 1: Plan Review"), the full `ARCHITECT_PLAN`, the domain config as
+   YAML (including `enforce_policies`), the domain's checklists in full,
+   `project.type`/`project.stack`/`project.name`, and `agents.{agent-name}.extra_instructions`.
+
+2. Wait for every dispatched domain review, then store the outputs as `DOMAIN_PLAN_REVIEWS`
+   (internal only; same visibility rules as `LEGAL_REVIEW`). Set `BILLING_REVIEWED` to true when the
+   billing plan review ran.
+3. Collect every "Handoff to legal-reviewer" line for Step 3.5c. When `LEGAL_REVIEW_APPLIES` is
+   false, these lines become open questions for the user in Step 3.6 instead.
+
+### Step 3.5c: Legal Plan Review (Conditional)
 
 **Entry condition:** `LEGAL_REVIEW_APPLIES` is true.
 
@@ -366,18 +470,32 @@ Never present an internal review as the plan. Never claim security passed unless
    - **Matching checklists**: Full content of all `LEGAL_CHECKLISTS`.
    - **Project configuration**: `project.type`, `project.stack`, `project.name`.
    - **Extra instructions**: The value of `agents.legal-reviewer.extra_instructions` from config.
+   - **Domain handoffs**: every "Handoff to legal-reviewer" line from Step 3.5b, and whether a
+     billing plan review ran (`BILLING_REVIEWED = true|false`); when false, also
+     `domain_reviews.billing.overrides` and `enforce_policies` for `owner: billing` checks.
 
 2. Receive legal reviewer output: a table of legal requirements with severity.
 
-3. If the legal reviewer identifies requirements:
-   - Feed the requirements back to the architect agent for integration as acceptance criteria in the relevant phases.
-   - If requirements span all phases (e.g., "must have privacy policy"), instruct the architect to create a dedicated phase or add to an existing cross-cutting phase.
-   - **Store the architect's revised plan as `ARCHITECT_PLAN`.**
-   - Return to Step 3.5a. Any architect revision invalidates the previous security verdict. After
-     security passes again, repeat legal review against the revised plan.
-   - Store the legal review output as `LEGAL_REVIEW` (internal only).
+3. Store the legal review output as `LEGAL_REVIEW` (internal only). Its requirements are handled
+   by Step 3.5d together with the domain requirements.
 
 4. Log legal review results for PM report.
+
+### Step 3.5d: Plan Review Round Exit
+
+Steps 3.5a -> 3.5b -> 3.5c form one plan review round.
+
+1. Collect the requirements from `DOMAIN_PLAN_REVIEWS` and `LEGAL_REVIEW`. Drop every requirement
+   the plan already contains as an acceptance criterion (same check ID or same substance).
+2. **Nothing new:** proceed to Step 3.6. "Decisions needed" rows and unanswered legal handoffs go to
+   Step 3.6 as questions for the user; they do not start another round.
+3. **New requirements:** feed them to the architect for integration as acceptance criteria in the
+   relevant phases (a cross-cutting requirement gets a dedicated phase or joins an existing
+   cross-cutting phase). Store the revision as `ARCHITECT_PLAN` and start a new round at Step 3.5a:
+   any revision invalidates earlier plan verdicts.
+4. Allow at most three rounds. If the third round still produces new requirements, stop and present
+   the plan with the unresolved requirements to the user in Step 3.6 instead of looping.
+5. Log plan review results for the PM report.
 
 ### Step 3.6: Present Plan to User for Approval
 
@@ -394,6 +512,14 @@ The architect has produced the following implementation plan:
 Internal reviews passed:
 - Security review: PASS ✓ [If iterations occurred: "Addressed N security concerns during planning."]
 - Legal compliance: PASS ✓ [If applicable. If requirements were added: "N legal requirements integrated as acceptance criteria."]
+- Domain reviews: [billing/mobile/infra: requirements integrated per domain, if any applied]
+
+Decisions needed from you (if any):
+[Numbered "Decisions needed" rows from specialist consults and domain/legal plan reviews that the
+plan does not settle, each with options and the default applied if you do not answer]
+
+Unresolved requirements (only if the three-round cap in Step 3.5d was hit):
+[Requirements the architect could not integrate, with the reviewer that raised them]
 
 Do you approve this plan? You can:
 1. Approve as-is
@@ -407,6 +533,14 @@ Do you approve this plan? You can:
 
 - **Approved**: Store as `APPROVED_PLAN`. Proceed to Phase 4 or Phase 5.
 - **Changes requested**: Dispatch a **new architect agent** with the original plan + user's change requests. Go back to Step 3.5.
+- **Answers to "Decisions needed" or unresolved requirements**: treat them as change requests —
+  the architect writes each answer into the plan (acceptance criteria or explicit override), then
+  Step 3.5 runs again. Approval without answers applies the listed defaults.
+- Every decision settled here (answered or defaulted) is stored as `SESSION_OVERRIDES` —
+  `{check, status: ACKNOWLEDGED, reason: "<decision>", decided_by: "user", decided_at: <date>}` —
+  and passed together with the config overrides to every legal and domain reviewer prompt in
+  Phase 5 (Steps 5c.4 and 5c.5, including re-reviews), so an approved decision is not reported again.
+  Offer once to persist them into `config.yaml`; never write the file without the user's yes.
 - **Rejected**: Go back to Step 3.1 with any additional context the user provides.
 
 ---
@@ -539,7 +673,7 @@ shared task list. An agent becomes a teammate simply by being spawned with the `
 
 The implementation team consists of:
 - Up to 2 implementer agents (spawned per phase)
-- Review agents (security-reviewer, legal-reviewer, acceptance-reviewer) — spawned as needed
+- Review agents (security-reviewer, legal-reviewer, domain reviewers, acceptance-reviewer) — spawned as needed
 
 All of them coordinate through the shared `TaskList`. Give every agent a stable, unique `name`
 (`implementer-1`, `security-reviewer`, ...) — that is the only handle the orchestrator and the
@@ -586,7 +720,7 @@ TaskCreate(
   activeForm="Acceptance reviewing Phase N"
 )
 → store as ACC_N
-→ TaskUpdate(taskId=ACC_N, addBlockedBy=[SEC_N])
+→ TaskUpdate(taskId=ACC_N, addBlockedBy=[PRE_ACC_N])   # SEC_N when no domain/legal review applies
 ```
 
 Then wire the cross-phase gate so no phase starts before the previous one is accepted:
@@ -598,8 +732,20 @@ TaskUpdate(taskId=IMPL_(N+1), addBlockedBy=[ACC_N])
 For phases with `UI work required: Yes` and `HAS_DESIGN_SYSTEM_OUTPUT`, also create `UX_N` and
 `TaskUpdate(taskId=IMPL_N, addBlockedBy=[UX_N])`.
 
+Review order per phase is **security -> domain reviews -> legal -> acceptance**. Domain reviews
+run before legal so their "Handoff to legal-reviewer" lines reach the legal reviewer, and so legal
+knows whether billing-owned checks were already covered.
+
+Domain review tasks (`DOM_N_{domain}`, e.g. `DOM_N_billing`) are created for every domain where
+`domain_applies(domain, phase N)` is true (at this point: its `files_to_touch`). Each is blocked by `SEC_N`. Domain
+reviews of one phase run in parallel with each other.
+
 Legal review tasks (`LEG_N`) are created only when `LEGAL_REVIEW_APPLIES` is true. They are blocked
-by `SEC_N` and block `ACC_N`. Otherwise do not create `LEG_N` and block `ACC_N` directly on `SEC_N`.
+by every `DOM_N_*` of the phase (or by `SEC_N` when there is none) and block `ACC_N`. Without `LEG_N`,
+`ACC_N` is blocked by every `DOM_N_*`, or directly by `SEC_N` when there is none.
+
+Let `PRE_ACC_N` name the task(s) `ACC_N` waits on: `LEG_N` if it exists, else all `DOM_N_*`, else
+`SEC_N`.
 
 Record every task ID in `PIPELINE_STATE` — Step 5.0c passes each agent its own task ID, and Step 7.3
 needs the full list to clean up.
@@ -609,8 +755,8 @@ never search `TaskList` for work (see Step 5b).
 
 ### Step 5.0c: Task Lifecycle Contract
 
-Every Phase 5 agent prompt must include its exact task ID (`IMPL_N`, `SEC_N`, `LEG_N`, `ACC_N`, or
-a re-review task). Each agent must:
+Every Phase 5 agent prompt must include its exact task ID (`IMPL_N`, `SEC_N`, `LEG_N`,
+`DOM_N_{domain}`, `ACC_N`, or a re-review task). Each agent must:
 
 1. Call `TaskGet` for that ID and confirm it is unblocked.
 2. Claim only that task with `TaskUpdate(owner=<agent name>, status="in_progress")`.
@@ -788,8 +934,48 @@ name: "security-reviewer"
 Parse the security reviewer's output:
 - Extract `Verdict` (PASS or FAIL)
 - Extract all findings with their severities
-- If `PASS`: proceed to Step 5c.5 (Legal Review) or Step 5d if legal review is not configured.
+- If `PASS`: proceed to Step 5c.4 (Domain Reviews) when `domain_applies(domain, phase)` for any domain, otherwise
+  Step 5c.5 (Legal Review) when `LEGAL_REVIEW_APPLIES`, otherwise Step 5d.
 - If `FAIL`: leave `SEC_N` in progress and proceed to Step 5e (Feedback Loop).
+
+### Step 5c.4: Domain Reviews (Conditional)
+
+**Entry condition:** `domain_applies(domain, phase)` is true for at least one
+domain in `DOMAIN_REVIEWS`.
+
+1. Recompute `domain_applies` now that the actual diff exists. If a domain applies but has no
+   task in the current chain, create it now before dispatching anything: blocked by the current
+   security task (`SEC_N`, or `RE_SEC_N` during re-review), and added to the `blockedBy` of the
+   current legal task (`LEG_N`/`RE_LEG_N`) when it exists, otherwise of the current acceptance task
+   (`ACC_N`/`RE_ACC_N`).
+2. Dispatch one reviewer per applicable domain, in parallel:
+
+   ```
+   Tool: Agent
+   subagent_type: {DOMAIN_REVIEWS[domain].agent}
+   name: "{domain}-reviewer"
+   ```
+
+   **Prompt must include ALL of the following inline:**
+   - Role and task assignment: "You are the {domain}-reviewer agent. Your assigned task ID is
+     {DOM_N_domain}. Follow the Step 5.0c task lifecycle contract. Use Mode 2: Code Review."
+   - The complete git diff and the phase description
+   - The domain config serialized as YAML (including `overrides`)
+   - The domain's checklists in full (for billing: plus the shared legal subscription checklists)
+   - `project.type`, `project.stack`, `project.name`
+   - `agents.{agent-name}.extra_instructions`
+   - Output format: the agent's own report format ending with `## {Domain} Review: PASS | FAIL`
+
+3. **Wait for every domain review of the phase** before evaluating; never enter Step 5e while a
+   sibling review is still running. Then, per report: extract the verdict and findings, save it to
+   `{SESSION_DIR}/reviews/phase-N-{domain}.md`, and keep it for the PM report.
+   - All `PASS`: proceed to Step 5c.5 when `LEGAL_REVIEW_APPLIES`, otherwise Step 5d.
+   - Any `FAIL`: leave each failed `DOM_N_{domain}` in progress and proceed to Step 5e with the
+     merged findings of all failed domains.
+4. Collect every "Handoff to legal-reviewer" line and set `BILLING_REVIEWED = true` when the billing
+   review ran. Both go to the legal reviewer in Step 5c.5. When `LEGAL_REVIEW_APPLIES` is false,
+   handoff lines are reported to the user in Step 7.1 as open legal questions; they are never
+   dropped silently.
 
 ### Step 5c.5: Legal Compliance Review (Conditional)
 
@@ -822,6 +1008,11 @@ name: "legal-reviewer"
 6. **Project configuration**: `project.type`, `project.stack`, `project.name`.
 
 7. **Extra instructions**: The value of `agents.legal-reviewer.extra_instructions` from config.
+
+7a. **Domain handoffs**: every "Handoff to legal-reviewer" line from Step 5c.4, and
+   `BILLING_REVIEWED = true|false` for this phase. When false, the legal reviewer also reports the
+   `owner: billing` checks of shared checklists; pass it `domain_reviews.billing.overrides` and
+   `domain_reviews.billing.enforce_policies` for those checks.
 
 8. **Output format instruction**:
    ```
@@ -874,7 +1065,7 @@ Parse the legal reviewer's output:
 
 ### Step 5d: Acceptance Review
 
-After security and legal reviews pass, dispatch an **acceptance-reviewer agent** as a team member:
+After security, legal and domain reviews pass, dispatch an **acceptance-reviewer agent** as a team member:
 
 **Step 5d.1: Gather the diff**
 
@@ -955,7 +1146,7 @@ Parse the acceptance reviewer's output:
 
 ### Step 5e: Feedback Loop
 
-When the security review, legal review, or acceptance review returns a `FAIL` verdict, enter the feedback loop.
+When the security review, legal review, a domain review, or acceptance review returns a `FAIL` verdict, enter the feedback loop.
 
 **Constants:**
 - `MAX_ITERATIONS = 3` per phase
@@ -968,11 +1159,12 @@ Combine all failure feedback into a single feedback document:
 ```markdown
 ## Reviewer Feedback (Iteration {iteration_count + 1})
 
-### Source: {security-reviewer | legal-reviewer | acceptance-reviewer | combination}
+### Source: {security-reviewer | legal-reviewer | {domain}-reviewer | acceptance-reviewer | combination}
 
 ### Findings Requiring Action:
 {List of all CRITICAL and HIGH findings from security review}
 {List of all CRITICAL findings from legal review}
+{List of all CRITICAL findings from each failing domain review}
 {List of all unmet acceptance criteria}
 {List of all failing checks}
 
@@ -997,9 +1189,16 @@ TaskCreate(
 TaskCreate(subject="Phase N: Security Re-Review (iteration {i})", ...)   → RE_SEC_N
 → TaskUpdate(taskId=RE_SEC_N, addBlockedBy=[FIX_TASK_ID])
 
+Domains are recomputed with `domain_applies(domain, phase)` over the diff so far, even when an earlier
+review failed before domain reviews ever ran. Re-review every applying domain, even if it passed
+before — the fix may have moved the problem into its area. Files the fix itself adds are caught by
+Step 5c.4.1 when the re-review runs.
+TaskCreate(subject="Phase N: {Domain} Re-Review (iteration {i})", ...)  → RE_DOM_N_{domain}
+→ TaskUpdate(taskId=RE_DOM_N_{domain}, addBlockedBy=[RE_SEC_N])
+
 If `LEGAL_REVIEW_APPLIES` is true:
 TaskCreate(subject="Phase N: Legal Re-Review (iteration {i})", ...)      → RE_LEG_N
-→ TaskUpdate(taskId=RE_LEG_N, addBlockedBy=[RE_SEC_N])
+→ TaskUpdate(taskId=RE_LEG_N, addBlockedBy=[all RE_DOM_N_* if created, otherwise RE_SEC_N])
 
 TaskCreate(
   subject="Phase N: Acceptance Re-Review (iteration {i})",
@@ -1007,7 +1206,7 @@ TaskCreate(
     Re-verify every criterion independently after the fixes. Prior findings: {acceptance_findings}.",
   ...
 ) → RE_ACC_N
-→ TaskUpdate(taskId=RE_ACC_N, addBlockedBy=[RE_LEG_N if created, otherwise RE_SEC_N])
+→ TaskUpdate(taskId=RE_ACC_N, addBlockedBy=[RE_LEG_N if created, otherwise all RE_DOM_N_* if created, otherwise RE_SEC_N])
 
 # Re-point the cross-phase gate at the NEW acceptance task
 → TaskUpdate(taskId=IMPL_(N+1), addBlockedBy=[RE_ACC_N])
@@ -1016,9 +1215,11 @@ TaskCreate(
 # any superseded downstream review tasks from the previous chain. Retire downstream tasks first,
 # while they are still blocked, and the failed task last. Never release the old chain before the
 # replacement acceptance gate is attached.
-# Example: on SEC_N failure, complete superseded ACC_N, then LEG_N when present, then SEC_N. On
-# LEG_N failure, complete superseded ACC_N, then LEG_N. On ACC_N failure, complete ACC_N. These
-# completion updates mean "superseded by the installed re-review chain", not PASS.
+# Example: on SEC_N failure, complete superseded ACC_N, then LEG_N when present, then every DOM_N_*
+# when present, then SEC_N. On DOM_N_{domain} failure, complete superseded ACC_N, then LEG_N when
+# present, then every DOM_N_* of the phase. On LEG_N failure, complete superseded ACC_N, then LEG_N.
+# On ACC_N failure, complete ACC_N. These completion updates mean "superseded by the installed
+# re-review chain", not PASS.
 ```
 
 Then send the feedback to the **same implementer agent** that built the phase (context preserved —
@@ -1052,12 +1253,14 @@ The implementer then:
 After the implementer completes fixes:
 
 - Re-run Step 5c with `RE_SEC_N` as the assigned task ID.
+- Re-run Step 5c.4 for each `RE_DOM_N_{domain}` (in parallel).
 - If `LEGAL_REVIEW_APPLIES` is true, re-run Step 5c.5 with `RE_LEG_N` as the assigned task ID.
 - Re-run Step 5d with `RE_ACC_N` as the assigned task ID.
 
 The re-review tasks replace the original review task IDs for this iteration. Do not reuse an already
 completed task or leave a newly created re-review task unclaimed. Run reviews in order: security →
-legal (when enabled) → acceptance; each starts only after the previous task completes successfully.
+domain reviews (when any apply) → legal (when enabled) → acceptance; each starts only after the
+previous stage completes successfully.
 
 **Step 5e.4: Evaluate and Loop**
 
@@ -1207,6 +1410,10 @@ Build a summary document covering all phases:
 - Critical findings: {N}
 - Acknowledged overrides: {N}
 
+### Domain Review Status:
+- Per domain (billing / mobile / infra): enabled Yes/No, phases reviewed {N}, verdict PASS/FAIL, critical findings {N}, acknowledged overrides {N}
+- Open policy decisions and legal handoffs: {list or "none"}
+
 ### Documentation Status:
 - Documentation update requested: Yes/No
 - Documentation update result: UPDATED/NO_CHANGES/SKIPPED
@@ -1335,6 +1542,9 @@ Display the PM's final report to the user. Include:
 - A list of all commits made during the pipeline
 - Any warnings or known issues
 - Legal compliance report path (if legal review was enabled)
+- Domain review verdicts per phase, with report paths
+- **Open legal handoffs and unresolved policy decisions**, as their own list — every "Handoff to
+  legal-reviewer" line no legal review covered, and every "Decisions needed" row still unanswered
 
 ### Step 7.2: Determine Next Steps
 
@@ -1659,6 +1869,9 @@ plugin's own `subagent_type` and a unique `name`:
 | Implementer | `dev-flow:implementer` | `implementer-{slot}` |
 | Security Reviewer | `dev-flow:security-reviewer` | `security-reviewer` |
 | Legal Reviewer | `dev-flow:legal-reviewer` | `legal-reviewer` |
+| Billing Reviewer | `dev-flow:billing-reviewer` | `billing-reviewer` |
+| Mobile Reviewer | `dev-flow:mobile-reviewer` | `mobile-reviewer` |
+| Infra Reviewer | `dev-flow:infra-reviewer` | `infra-reviewer` |
 | Acceptance Reviewer | `dev-flow:acceptance-reviewer` | `acceptance-reviewer` |
 | Documentation Maintainer | `dev-flow:documentation-maintainer` | `documentation-maintainer` |
 | PM | `dev-flow:pm` | `pm` |
@@ -1692,7 +1905,7 @@ mode). The role and philosophy come from the agent definition; the prompt carrie
 
 | Field | Value |
 |-------|-------|
-| When | Phase 4 (Design System) and Phase 5a (pre-implementation) |
+| When | Phase 3 Step 3.2b (consult), Phase 4 (Design System) and Phase 5a (pre-implementation) |
 | Input | APPROVED_PLAN + design system inventory + existing personas + RESOLVED_CONFIG |
 | Skills | `ui-ux-pro-max` (and its `design-system` / `ui-styling` / `brand` variants) when available — the agent checks and falls back gracefully |
 | Output | Design system components, personas, gallery |
@@ -1722,18 +1935,29 @@ mode). The role and philosophy come from the agent definition; the prompt carrie
 
 | Field | Value |
 |-------|-------|
-| When | Phase 3 Step 3.5b (plan review) and Phase 5 Step 5c.5 (code review) |
+| When | Phase 3 Step 3.5c (plan review) and Phase 5 Step 5c.5 (code review) |
 | Input | Plan or git diff + LEGAL_CONFIG + LEGAL_CHECKLISTS + RESOLVED_CONFIG |
 | Skills | None |
 | Output | Legal compliance review with PASS/FAIL verdict |
 | User interaction | No |
 | Condition | Only if `LEGAL_CONFIG` is not null and task is not hotfix/refactor |
 
+### Domain Reviewers (billing, mobile, infra)
+
+| Field | Value |
+|-------|-------|
+| When | Phase 3 Step 3.2b (consult), Step 3.5b (plan review) and Phase 5 Step 5c.4 (code review) |
+| Input | Plan or git diff + `domain_reviews.{domain}` config + domain checklists (+ shared legal subscription checklists for billing) + RESOLVED_CONFIG |
+| Skills | None |
+| Output | Domain review with PASS/FAIL verdict |
+| User interaction | No (policy decisions surface through the architect in Step 3.6) |
+| Condition | `domain_reviews.{domain}.enabled` and the phase touches one of its `triggers` |
+
 ### Acceptance Reviewer
 
 | Field | Value |
 |-------|-------|
-| When | Phase 5d (after security and legal review pass) |
+| When | Phase 5d (after security, legal and domain reviews pass) |
 | Input | Git diff + acceptance criteria + full RESOLVED_CHECKS + RESOLVED_CONFIG |
 | Skills | None |
 | Output | Acceptance review with PASS/FAIL verdict |
@@ -1785,9 +2009,11 @@ INPUT (PRD/task/text)
   |
   v
 [3. Planning Phase]
-  |-- Dispatch architect --> analysis + questions
+  |-- Dispatch architect --> analysis + questions + affected areas
+  |-- Specialist consult (UX / billing / mobile / infra, if affected) --> constraints + decisions
   |-- AskUserQuestion --> user answers
   |-- Dispatch architect --> implementation plan
+  |-- Plan review rounds: security -> domain (if triggered) -> legal (if configured), max 3
   |-- AskUserQuestion --> user approves plan
   |
   v
@@ -1809,8 +2035,12 @@ INPUT (PRD/task/text)
   |     |-- Dispatch security-reviewer --> PASS/FAIL
   |     |-- If FAIL --> [5e]
   |
+  |-- [5c.4] Domain Reviews (billing / mobile / infra, when the diff hits their triggers)
+  |     |-- Dispatch {domain}-reviewer(s) in parallel --> PASS/FAIL each
+  |     |-- If any FAIL --> [5e]
+  |
   |-- [5c.5] Legal Compliance Review (if LEGAL_CONFIG != null)
-  |     |-- Dispatch legal-reviewer --> PASS/FAIL
+  |     |-- Dispatch legal-reviewer (+ domain handoffs) --> PASS/FAIL
   |     |-- If FAIL --> [5e]
   |
   |-- [5d] Acceptance Review

@@ -1,0 +1,164 @@
+name: Polish seller - VAT, VIES, OSS, KSeF invoicing for subscriptions
+version: "2026.1"
+applies_when:
+  jurisdictions: [PL]
+  extras: [subscriptions]
+severity_default: HIGH
+
+# Seller established in Poland selling subscriptions B2B and B2C.
+# Shared by legal-reviewer and billing-reviewer; each REPORTS only its `owner` checks.
+# Dates reflect the law as known when this checklist version was written - verify before relying on them.
+
+checks:
+  - id: PLVAT-01
+    owner: billing
+    area: "VAT decision tree"
+    question: "Is the VAT treatment decided by: Poland -> 23%; EU business with a valid VAT number -> service not taxable in Poland (art. 28b), invoice annotated 'odwrotne obciążenie' (reverse charge), no Polish VAT shown; EU consumer or unconfirmed number -> Polish 23% below the OSS threshold, destination-country rate via OSS above it; business outside the EU -> not taxable in Poland (art. 28b)?"
+    severity: CRITICAL
+    hints:
+      - "Look for the function mapping country + VAT-id status to a mechanism and a rate"
+      - "B2C outside the EU: check the rules of the buyer's country; do not assume no tax"
+      - "Reverse charge is not a 0% rate. A 0% provider tax rate may implement it technically, but the fiscal invoice must show the reverse-charge annotation, not a 0% VAT rate"
+    remediation: "Implement one resolver returning (mechanism, rate, annotation). Every checkout, plan change, renewal and re-validation job calls it."
+
+  - id: PLVAT-02
+    owner: legal
+    area: "OSS threshold not assumed permanent"
+    question: "Does the design avoid assuming that EU B2C sales are taxed at Polish 23% forever, given the EUR 10,000 EU-wide OSS threshold for B2C electronic services?"
+    severity: HIGH
+    hints:
+      - "The app does not have to detect the threshold, but the rate for EU B2C must be configurable per country"
+      - "Once registered for OSS, the destination-country rate applies and OSS records must be kept 10 years (Reg. 282/2011 art. 63c)"
+    remediation: "Keep per-country B2C rates in configuration and document who tracks the OSS threshold outside the app."
+
+  - id: PLVAT-03
+    owner: billing
+    area: "VAT number re-validated at every renewal"
+    question: "Is the customer's VAT number validated in VIES on every renewal, not only at first purchase?"
+    severity: CRITICAL
+    hints:
+      - "VAT numbers get revoked; reverse charge on a revoked number becomes the seller's liability"
+      - "Look for VIES calls in the renewal path (e.g. the webhook for a new cycle invoice)"
+    remediation: "Re-validate before each renewal charge and re-resolve the mechanism; switch to 23% when validation fails."
+
+  - id: PLVAT-04
+    owner: billing
+    area: "VIES failure fails closed"
+    question: "When VIES is unavailable or does not confirm the number, does the system charge VAT instead of granting reverse charge?"
+    severity: CRITICAL
+    hints:
+      - "Reg. 282/2011 art. 18: the seller may treat the buyer as a business only after obtaining confirmation of the VAT number; without it the buyer is treated as a consumer and VAT is charged"
+      - "Anti-pattern: grant 0% now, validate later"
+    remediation: "No confirmation = VAT charged. A later successful validation produces a correction."
+
+  - id: PLVAT-05
+    owner: billing
+    area: "Single validation authority"
+    question: "Is VIES the only source that can grant reverse charge, with any secondary lookup service treated as a hint only, and does the code check the SOURCE of a positive result, not just the boolean?"
+    severity: CRITICAL
+    hints:
+      - "A fallback service answers exactly when VIES is down - that bypasses PLVAT-04 through the back door"
+      - "Look for code like valid = result.valid without checking result.source"
+    remediation: "Only a VIES confirmation grants reverse charge. Secondary results never change the rate; they may only trigger a later VIES re-check."
+
+  - id: PLVAT-06
+    owner: legal
+    area: "Mandatory KSeF e-invoicing"
+    question: "Are B2B invoices of a Polish seller issued through a system connected to KSeF (mandatory from 1 April 2026 for all taxpayers; the exemption for sales up to PLN 10,000 gross per month lasts only until 31 December 2026)?"
+    severity: CRITICAL
+    hints:
+      - "A payment provider's own PDF invoice is not a KSeF invoice"
+      - "Applies also to B2B buyers abroad"
+    remediation: "Issue B2B invoices through KSeF (directly or via an accounting system integrated with it)."
+
+  - id: PLVAT-07
+    owner: legal
+    area: "One document called 'invoice'"
+    question: "Is exactly one system's document shown to the customer as 'invoice' (the KSeF one for B2B), while the payment provider's document is labelled only as a payment confirmation/receipt?"
+    severity: CRITICAL
+    hints:
+      - "Two documents for the same supply, both called invoice, create double VAT liability (art. 108 of the VAT Act: every document showing VAT creates a tax liability)"
+      - "Search emails, UI and customer portal for provider invoice PDFs or numbers presented as invoices"
+      - "Disable the provider's automatic invoice emails for B2B unless the provider is deliberately the only fiscal source"
+    remediation: "Choose the fiscal source per app. The other document is never called 'invoice' and its number never appears where an invoice number is expected."
+
+  - id: PLVAT-08
+    owner: legal
+    area: "Foreign-currency invoice"
+    question: "Does an invoice in EUR (or other foreign currency) with VAT above 0% show the VAT amount in PLN at the NBP average rate from the business day before the tax point?"
+    severity: HIGH
+    hints:
+      - "Art. 106e(11) and art. 31a of the VAT Act"
+      - "Payment provider PDFs do not do this"
+    remediation: "Generate the fiscal invoice with the PLN VAT amount and the NBP rate used."
+
+  - id: PLVAT-09
+    owner: billing
+    area: "No invoice for money that never arrived"
+    kind: policy
+    question: "For prepaid card/online subscriptions, is the fiscal invoice (number, PDF, payment-history entry) created only after confirmed payment, never on the provider's 'invoice created' event, and does a failed charge never leave an invoice number behind?"
+    severity: CRITICAL
+    hints:
+      - "Providers create an open 'invoice' object before attempting the charge; that is not an issued document"
+      - "Polish law allows invoicing before payment (e.g. B2B net-30); this default protects prepaid subscriptions from tax liability on money never received. Invoice-first B2B billing overrides it"
+      - "Before payment the customer may see at most a payment request, with a different name and no invoice-series number"
+      - "Test: is there any path where the customer receives an invoice number while status != paid? A payment row that can carry a PDF link regardless of status is a leak"
+    remediation: "Issue the fiscal document on the 'invoice paid' event only. Failed payments leave no invoice behind."
+
+  - id: PLVAT-10
+    owner: billing
+    area: "Issued invoices are immutable"
+    question: "Are rate, amount, mechanism and annotation frozen on the invoice row at issue time, with corrections only as separate correction documents?"
+    severity: HIGH
+    hints:
+      - "After sending to KSeF there is nothing to recompute"
+      - "Look for UPDATE on invoice rows or an 'edit invoice' path"
+    remediation: "Freeze fiscal fields at issue; provide only an 'issue correction' path."
+
+  - id: PLVAT-11
+    owner: billing
+    area: "Retention of tax evidence"
+    question: "Are invoices and VAT-validation evidence kept under financial retention (until 31 December of year+6 relative to the document year; OSS records 10 years), separate from product-data cleanup?"
+    severity: HIGH
+    hints:
+      - "Tax Ordinance art. 70 §1: 5 years from the end of the year in which the tax payment deadline passed; plus art. 112 VAT Act"
+      - "Anti-pattern: now() - N days cleanup, which deletes December documents about two weeks early"
+      - "Correct rule: delete only when year(created_at) <= current_year - 7"
+    remediation: "Separate financial retention from operational retention and use year-based cutoffs."
+
+  - id: PLVAT-12
+    owner: legal
+    area: "No automatic invoice promised before automation exists"
+    question: "If fiscal invoices are issued manually (e.g. at launch), do customer emails avoid promising an automatic invoice, and does the operator get notified after every paid invoice so none is missed?"
+    severity: MEDIUM
+    kind: policy
+    hints:
+      - "Search email templates for 'your invoice is attached/available' wording"
+    remediation: "Align copy with the real process and add an operator notification (IDs and amounts only, no PII) on each paid invoice."
+
+  - id: PLVAT-13
+    owner: billing
+    area: "Invoice deadline"
+    question: "Is every invoice (automatic or issued manually by an operator) guaranteed to be issued no later than the 15th day of the month following the month of the tax point - for prepaid subscriptions usually the month the payment was received - with a worklist or alert for paid-but-uninvoiced payments before that deadline?"
+    severity: HIGH
+    hints:
+      - "Art. 106i(1)-(2) of the VAT Act: the 15th of the following month; for payments received before the service is performed the tax point is the receipt of payment (art. 19a(8))"
+      - "The deadline makes manual or batch invoicing legitimate (see PLVAT-12), but only with a check that nothing paid last month is still uninvoiced"
+      - "Invoices must not be issued earlier than 60 days before the supply or payment (art. 106i(7))"
+      - "Consumers: an invoice is required only on request (art. 106b(3)) unless the seller invoices every consumer instead of issuing receipts (see PLVAT-14); B2B: always, through KSeF"
+      - "Verify rules for your settlement model with an accountant"
+    remediation: "Add a daily/monthly job listing paid payments without a fiscal invoice and alert the operator well before the 15th."
+
+  - id: PLVAT-14
+    owner: billing
+    area: "Invoices instead of receipts for consumers"
+    question: "If the seller issues invoices to consumers instead of fiscal receipts, does every consumer payment qualify for the cash-register exemption - paid in full through a bank or payment operator (never cash), and stored with a link to the specific service and to the buyer's identity - with an alert for any payment that lacks either?"
+    severity: HIGH
+    hints:
+      - "Exemption for services paid via bank/post/credit union: annex item 42 of the Minister of Finance regulation of 17.12.2024 (Dz.U. 2024 poz. 1902); records must show which service the payment was for and for whom"
+      - "Card or payment-operator payments settled to the seller's bank account are accepted as 'via bank' in individual tax rulings, not in the regulation text - confirm with an accountant"
+      - "One cash payment or an unidentifiable payment breaks the exemption"
+      - "Consumer invoices do not have to go through KSeF; if they do, deliver them with the QR code and KSeF number"
+      - "Exemption lists are time-limited; re-check when a new regulation is published"
+    remediation: "Reject non-identifiable payment paths, persist service and buyer data with every consumer payment, and alert on gaps."
+

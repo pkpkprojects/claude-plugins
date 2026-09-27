@@ -1,0 +1,199 @@
+name: EU consumer law for subscriptions (withdrawal, price display, durable medium)
+version: "2026.1"
+applies_when:
+  jurisdictions: [EU]
+  extras: [subscriptions]
+severity_default: HIGH
+
+# Shared by legal-reviewer and billing-reviewer. Each reviewer REPORTS only checks whose
+# `owner` matches its role and reads the rest as context. `owner: legal` = is the obligation
+# met (information, wording, form, notice). `owner: billing` = does the code implement it
+# correctly (state, money, payment provider).
+
+checks:
+  - id: EUSUB-01
+    owner: legal
+    area: "Three exits are distinct"
+    question: "Does the product keep withdrawal (statutory, refund), downgrade (no refund, at period end) and account cancellation (no refund, at period end) as three separate actions with separate copy?"
+    severity: CRITICAL
+    hints:
+      - "Search UI copy for 'cancel', 'withdraw', 'refund', 'downgrade' and check which flow each label triggers"
+      - "Look for one shared component or sentence used for more than one exit, e.g. 'nothing is refunded' shown on the withdrawal path"
+      - "Colloquial 'resignation/cancel' often covers both withdrawal and cancellation, which move money in opposite directions"
+    remediation: "Model withdrawal, downgrade and account cancellation as three flows. Withdrawal: only inside the window, refund, access ends now, contract void, provider subscription cancelled. Downgrade: any time, no refund, plan drops at the end of the paid period. Cancel: any time, no refund, account valid until the end of the paid period. Never share copy between them."
+
+  - id: EUSUB-02
+    owner: legal
+    area: "SaaS subscription is a continuous service"
+    question: "Does the design treat a SaaS subscription as a continuous service (withdrawal right survives the whole 14-day window) rather than one-off digital content that loses the right on delivery?"
+    severity: CRITICAL
+    hints:
+      - "Look for checkout copy saying the right of withdrawal is lost once access starts"
+      - "Directive 2011/83/EU art. 16(m) (digital content) applies to one-off supply, not an ongoing service; the services exception applies only after full performance, which never happens while the subscription runs"
+    remediation: "Keep the withdrawal right for the full 14 days regardless of usage. Use the immediate-start request (EUSUB-04) to allow a proportional deduction instead of claiming the right is lost."
+
+  - id: EUSUB-03
+    owner: billing
+    area: "Every change of terms opens its own window"
+    kind: policy
+    question: "Is each change of contract terms (first purchase, upgrade, billing-period change, renewal at a higher price) stored as its own contract record with its own withdrawal deadline?"
+    severity: CRITICAL
+    hints:
+      - "An upgrade or a price increase agreed online is arguably a new distance agreement with its own price, which is why this default opens a new window; C-565/22 (see EUSUB-16) only covers trial-to-paid conversion"
+      - "Conservative default, not settled case law: a project may decide otherwise with legal advice"
+      - "Red flag: a single boolean or date like 'withdrawable_until' on the subscription or account"
+      - "Downgrade and renewal without a price change do NOT open a new window"
+    remediation: "Create one contract row per change with concluded_at, withdrawal_deadline, amount actually charged, requested_immediate_start and previous_period_end. Derive withdrawability from these rows only."
+
+  - id: EUSUB-04
+    owner: legal
+    area: "Immediate-start request is explicit and mandatory"
+    question: "Is an explicit request to start the service immediately collected at contract conclusion (separate field, required checkbox), so that a proportional deduction on withdrawal has a legal basis?"
+    severity: CRITICAL
+    hints:
+      - "Without an explicit request the refund on withdrawal is 100% regardless of usage"
+      - "Search checkout for a required consent checkbox and a persisted field such as requested_immediate_start"
+      - "Pre-ticked or optional checkbox = no valid request"
+    remediation: "Add a required, unticked checkbox requesting immediate start and acknowledging the proportional charge on withdrawal. Persist it per contract. Refund is full whenever the field is false."
+
+  - id: EUSUB-05
+    owner: billing
+    area: "Withdrawal applies to the top of the stack only"
+    question: "Does withdrawal always target the newest non-withdrawn contract (ordered by conclusion date), check the deadline only on that single candidate, and refuse without reaching back to older contracts?"
+    severity: HIGH
+    hints:
+      - "Look at the query picking the contract: ORDER BY concluded_at DESC among rows without a withdrawal record"
+      - "Anti-pattern: ordering by withdrawal_deadline, which lets a customer skip an expired newer change and withdraw from an older one"
+      - "A newer change that merely expired (kept silently) blocks the older one permanently; only an explicit withdrawal from the newer one exposes the older one"
+    remediation: "Select the newest non-withdrawn contract; if its deadline passed, refuse (e.g. 410) and stop. Buying further changes while an older window is open stays allowed; only withdrawing is restricted."
+
+  - id: EUSUB-06
+    owner: billing
+    area: "Withdrawal voids the contract at the payment provider"
+    question: "Does a successful withdrawal automatically cancel or revert the subscription at the payment provider, so the next cycle cannot charge for a contract that legally no longer exists?"
+    severity: CRITICAL
+    hints:
+      - "Search the withdrawal handler for a provider call (cancel/update subscription)"
+      - "A manual 'operator will cancel in the dashboard' step is a finding"
+    remediation: "In the same flow as the refund, cancel (first purchase) or revert (plan change) the provider subscription. A manual cancel done in the provider dashboard must arrive through the same webhook path as the automatic one."
+
+  - id: EUSUB-07
+    owner: billing
+    area: "Refund amount"
+    question: "Is the withdrawal refund computed from the amount the provider actually charged for that contract (full, or pro-rata only when immediate start was requested)?"
+    severity: CRITICAL
+    hints:
+      - "Compare refund code with the stored plan price, stored net amount, or our own calculator: all three are wrong sources"
+      - "Test must compare the refund with the provider's paid amount, not with our stored number (self-referential)"
+      - "amount_paid excludes applied customer balance; it equals the charge only when no credit balance exists (BILL-11)"
+    remediation: "Refund = amount_paid on the provider's paid invoice for that contract; apply pro-rata only if requested_immediate_start is true. Assert against the provider value in tests."
+
+  - id: EUSUB-08
+    owner: billing
+    area: "Withdrawing an upgrade restores the original period end"
+    question: "When an upgrade reset the billing anchor, does withdrawal restore the pre-change period end (stored previous_period_end) instead of leaving the customer on the old plan with a longer paid period?"
+    severity: HIGH
+    hints:
+      - "Changing only the price back leaves the new, longer period end in place"
+      - "If previous_period_end already passed when the customer withdraws, it cannot be set in the past; that variant must be disclosed in the consent text at conclusion"
+      - "If the recomputation would leave a credit balance at the provider, refuse (409) instead of storing credit"
+    remediation: "Store previous_period_end on the contract. On withdrawal reprice without proration and move the next charge back to previous_period_end. Disclose the edge case in consent copy."
+
+  - id: EUSUB-09
+    owner: billing
+    area: "Renewal inside an open window"
+    question: "Can a renewal land inside an open withdrawal window, and if so, is that case designed explicitly?"
+    severity: MEDIUM
+    hints:
+      - "If an upgrade resets the billing anchor to the upgrade date, the next renewal is a full period away and cannot fall inside the 14 days"
+      - "Without the reset (common provider default), an upgrade late in a monthly period renews inside its own window"
+      - "Either choice is valid; an undesigned overlap is the defect"
+    remediation: "Reset the anchor on upgrade (see STRIPE-09) or define how a renewal inside an open window is refunded on withdrawal."
+
+  - id: EUSUB-10
+    owner: legal
+    area: "Withdrawal form present before conclusion"
+    question: "Is the model withdrawal form present in the checkout itself (not only deep inside the terms), and is its exact text stored with the consent record even when collapsed?"
+    severity: HIGH
+    hints:
+      - "A link to full terms containing the form somewhere is borderline"
+      - "Good pattern: native <details>/<summary>, collapsed by default, under the consent checkboxes; not a modal and not a wall of text above the pay button"
+      - "Stored consent text must equal what was rendered, including the collapsed form"
+    remediation: "Render the model form inline in a collapsed <details> in checkout and persist it verbatim in the rendered-consent record."
+
+  - id: EUSUB-11
+    owner: legal
+    area: "Durable medium"
+    question: "Is every legally relevant notice (order confirmation, withdrawal information, deadline cure, price change) delivered on a durable medium (email or downloadable file), not only in the app UI?"
+    severity: HIGH
+    hints:
+      - "An in-app panel is controlled by the seller and is not a durable medium (Recital 23 of 2011/83/EU; CJEU C-49/11 Content Services)"
+      - "Panel may duplicate the notice for convenience but never be the only channel"
+    remediation: "Send the notice by email and keep evidence of delivery (Message-ID and content hash)."
+
+  - id: EUSUB-12
+    owner: billing
+    area: "Extended deadline and its cure"
+    question: "If pre-contract withdrawal information was missing, is the window extended (up to 12 months) and shortened back to 14 days from proven delivery of complete information, through the same audited deadline-correction path?"
+    severity: MEDIUM
+    hints:
+      - "Directive 2011/83/EU art. 10(2): delivering the information later restarts a 14-day window from delivery"
+      - "final_deadline = MIN(extended_deadline, delivery_date + 14 days); a cure may only shorten"
+      - "Without delivery evidence (Message-ID + content hash) keep the extension"
+      - "Automatic cures and manual operator corrections use the same audit trail with different reason codes"
+    remediation: "Implement cure as an audited deadline correction with its own reason code and proof of delivery."
+
+  - id: EUSUB-13
+    owner: legal
+    area: "Consumers see the full gross price"
+    question: "Can a consumer see the total gross price (taxes included) on every price surface (pricing page, checkout, plan change, consent text, emails, terms), at least as prominently as any net price?"
+    severity: HIGH
+    hints:
+      - "Directive 2011/83/EU art. 6(1)(e), Directive 2005/29/EC art. 7(4)(c) and national price-indication laws (in Poland: the act on informing about prices of goods and services)"
+      - "On a public price list you do not know whether the visitor is a consumer; a 'business/consumer' toggle defaulting to net fails for consumers who never click it"
+      - "B2B-only products (sales to consumers refused at checkout) may show net only"
+      - "Net-headline pricing ('X + VAT') is allowed only with the gross amount next to it at equal prominence"
+    remediation: "Show the gross price to consumers everywhere a price appears; if you price net for businesses, render 'X net + VAT (Y gross)'."
+
+  - id: EUSUB-14
+    owner: legal
+    area: "Price change notice"
+    question: "Is a price change notified separately from the renewal reminder, with the new withdrawal window stated?"
+    severity: HIGH
+    hints:
+      - "Search email templates for renewal reminders that also carry price changes"
+    remediation: "Send a dedicated price-change email before it takes effect; treat the new price as a change of terms (EUSUB-03)."
+
+  - id: EUSUB-15
+    owner: billing
+    area: "Fiscal document follows withdrawal"
+    question: "Does a withdrawal/refund also trigger a correction of the fiscal invoice, checked symmetrically both when the withdrawal happens and when an (asynchronously generated) invoice appears later?"
+    severity: HIGH
+    hints:
+      - "Payment provider refund and the fiscal/accounting invoice are two separate sources of truth"
+      - "One-time check at withdrawal misses invoices generated later by a retry job"
+      - "If the accounting system has no correction API, flag 'correction needed' and give operators a worklist; do not fake automation"
+      - "Both checks must share one function and one lock to close the TOCTOU window"
+    remediation: "Add a shared 'needs fiscal correction' check called from the withdrawal flow and from invoice creation, under the same lock; expose a worklist with audit log when correction is manual."
+
+  - id: EUSUB-16
+    owner: legal
+    area: "Free trial converting to paid"
+    question: "When a free trial converts automatically into a paid subscription, is the consumer told at trial sign-up - clearly, explicitly and before agreeing - that the service becomes paid after the trial, from which date, and at what total price?"
+    severity: HIGH
+    hints:
+      - "CJEU C-565/22 (Sofatutor, 2023): the withdrawal right arises once, at the start of the trial, if this information was given clearly at that moment; if it was not, the consumer gets a new 14-day window when the trial converts"
+      - "Look at trial sign-up copy, the consent record and the confirmation email for price and conversion date"
+    remediation: "Show price, conversion date and auto-renewal at trial sign-up, store it in the consent record and repeat it in the confirmation email; otherwise treat the conversion as opening a new withdrawal window (EUSUB-03)."
+
+  - id: EUSUB-17
+    owner: legal
+    area: "Online withdrawal function"
+    question: "Does the product offer an online withdrawal function (a clearly labelled 'withdraw from contract here' entry point with a confirmation step and an acknowledgement on a durable medium) for every contract concluded online that carries a right of withdrawal?"
+    severity: HIGH
+    hints:
+      - "Directive (EU) 2023/2673 adds art. 11a to Directive 2011/83/EU; it applies from 19 June 2026 to all distance contracts concluded via an online interface, not only financial services"
+      - "Binding on traders only through national law - check the transposition status in each target country; where it is late, it is not yet enforceable against the trader but is coming"
+      - "Reuse the existing withdrawal flow (EUSUB-05..08); the function is an entry point, not a new refund logic"
+    remediation: "Add the withdrawal entry point to the account area, with a confirmation step and an email acknowledgement, and track the national transposition dates."
+

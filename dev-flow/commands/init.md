@@ -261,6 +261,18 @@ agents:
     model: "sonnet"
     extra_instructions: ""
 
+  billing-reviewer:
+    model: "sonnet"
+    extra_instructions: ""
+
+  mobile-reviewer:
+    model: "sonnet"
+    extra_instructions: ""
+
+  infra-reviewer:
+    model: "sonnet"
+    extra_instructions: ""
+
   pm:
     model: "sonnet"
     extra_instructions: ""
@@ -276,6 +288,7 @@ agents:
    - `security-reviewer`: **sonnet**
    - `acceptance-reviewer`: **sonnet**
    - `legal-reviewer`: **sonnet**
+   - `billing-reviewer`, `mobile-reviewer`, `infra-reviewer`: **sonnet**
    - `pm`: **sonnet**
 4. Customize the `extra_instructions` field per agent based on detected stack (see 4.1.1 below).
 5. Do NOT add extra sections (like `infrastructure:` or `architecture:`) -- the config schema is defined by the template. Any project-specific context goes into agent `extra_instructions`.
@@ -784,6 +797,27 @@ Do you want to enable legal compliance reviews?
 
 ---
 
+## Step 5.6: Domain Reviews Configuration (Optional)
+
+Detect candidate domains from the project, then confirm with one multi-select `AskUserQuestion`:
+
+- **billing** — suggest when dependencies or code mention a payment provider (`stripe`, `przelewy24`,
+  `payu`, `adyen`, `in_app_purchase`, `purchases_flutter`, `storekit`, `billing`) or paths contain
+  `billing`, `subscription`, `checkout`, `invoice`.
+- **mobile** — suggest when `pubspec.yaml`, `ios/`, `android/`, or a React Native/Expo manifest exists.
+- **infra** — suggest when Dockerfiles, compose files, CI workflows, orchestrator job specs,
+  Terraform/Ansible/Helm, or a migrations directory exist.
+
+For each selected domain, append a `domain_reviews.{domain}` block copied from the commented example
+in the default template, with `enabled: true` and `triggers` narrowed to the paths that actually
+exist in this repository. For billing, also ask which providers are used and which jurisdictions
+the seller operates in (reuse `legal.jurisdictions` when already set); if the product sells
+subscriptions and a `legal` section exists, add `subscriptions` to `legal.extras`.
+
+Skip this step silently when no domain is detected.
+
+---
+
 ## Step 6: Configure .gitignore
 
 Set up `.gitignore` so only config files are tracked and runtime artifacts (review reports, watchdog files, plans, worktrees) are automatically ignored.
@@ -835,6 +869,7 @@ Display a clear summary of what was detected and generated:
 - **Storybook:** [yes/no - config path if detected]
 - **Components Path:** [detected path or "not detected"]
 - **Legal Compliance:** [enabled/disabled - jurisdictions and sectors if enabled]
+- **Domain Reviews:** [enabled domains with providers/triggers, or "none"]
 
 ### Files Created
 - `.claude/dev-flow/config.yaml` -- main pipeline configuration

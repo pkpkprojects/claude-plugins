@@ -1,0 +1,233 @@
+name: Subscription billing core (payment-provider agnostic)
+version: "2026.1"
+applies_when: {}
+severity_default: HIGH
+
+# kind: rule   = correctness requirement; override only with a documented reason.
+# kind: policy = opinionated default; a project may override it (ACKNOWLEDGED) with its own decision.
+
+checks:
+  # --- A. Money before entitlement -------------------------------------------------
+  - id: BILL-01
+    kind: rule
+    area: "Entitlement only after money arrives"
+    question: "Is a paid plan (first purchase or upgrade) granted only by the handler of the confirmed-payment event (paid invoice, verified provider notification, verified store transaction), never by checkout-completed, a return URL or the user's click?"
+    severity: CRITICAL
+    hints:
+      - "Checkout sessions complete successfully for async methods (SEPA debit, bank transfer) and for payments still waiting for 3DS"
+      - "Grep for plan/tier updates in checkout-completed handlers; that handler may store consent/contract, not raise the plan"
+      - "Exactly one writer of the entitlement transition"
+    remediation: "Move the plan change into the paid-invoice handler; the checkout handler only records legal data."
+
+  - id: BILL-02
+    kind: rule
+    area: "Grace period belongs to renewal only"
+    question: "Does the failure path branch on the invoice reason, so that a failed FIRST purchase or plan change grants nothing, and only an automatic renewal enters the grace period?"
+    severity: CRITICAL
+    hints:
+      - "First purchase fails -> stay on trial/previous state, zero credit access"
+      - "Upgrade/period change fails -> change does not happen, old plan at old price continues"
+      - "Renewal fails -> grace period (BILL-04)"
+      - "Classic silent bug: dunning code reacts to 'subscription payment failed' without checking the reason, so an unpaid first invoice gets a week of full access"
+    remediation: "Branch on the invoice reason (first purchase / update / cycle). Only cycle invoices start grace."
+
+  - id: BILL-03
+    kind: policy
+    area: "Payment methods pinned in code"
+    question: "Is the list of payment methods pinned in code when creating the payment session (cards by default), with asynchronous methods added only by an explicit design decision?"
+    severity: HIGH
+    hints:
+      - "A dashboard toggle can enable SEPA and silently change when entitlement is granted across the app"
+      - "Async methods need a waiting screen, a deadline and a 'money arrived' email; without them BILL-01 turns into free access"
+      - "Pinning narrows risk but does not replace BILL-01: 3DS reproduces the gap on cards"
+    remediation: "Pass payment_method_types explicitly. Add async methods only with a designed pending state."
+
+  # --- B. Dunning ------------------------------------------------------------------
+  - id: BILL-04
+    kind: rule
+    area: "One grace window per unpaid period"
+    question: "Is the grace window (default 7 days) armed once per unpaid billing period, and NOT re-armed by each retry of the same invoice?"
+    severity: CRITICAL
+    hints:
+      - "Providers retry several times over 2-3 weeks; re-arming on every failure means a dead card keeps access forever"
+      - "Look for grace_until = now() + N on every payment_failed event"
+    remediation: "Store the grace deadline per invoice/period; set it only if unset."
+
+  - id: BILL-05
+    kind: rule
+    area: "Anchor stays on the old period end"
+    question: "When a late payment succeeds inside grace, does the new period start at the old period end (not at the payment date)?"
+    severity: HIGH
+    hints:
+      - "Otherwise each liquidity crisis shifts the billing date and nobody knows when anyone renews"
+    remediation: "Keep the billing anchor; the grace days are service delivered on credit, a deliberate cost."
+
+  - id: BILL-06
+    kind: policy
+    area: "Unpaid renewal lands on the least data-destructive exit"
+    question: "When grace expires, does the account land on the exit that destroys less data (often cancel with an undo window), rather than on a Free plan with shorter retention or hard caps that triggers active deletion?"
+    severity: CRITICAL
+    hints:
+      - "Check: does Free have shorter retention or harder caps than the paid plan? Then downgrade-to-Free runs a pruner that deletes history immediately"
+      - "Cancel usually deletes nothing until the undo window ends"
+    remediation: "Pick the landing state by data impact, not by the gentler-sounding name, and document why."
+
+  - id: BILL-07
+    kind: rule
+    area: "No immediate upgrade while past_due"
+    question: "Is an immediate upgrade refused while the subscription is past_due, while a deferred downgrade stays allowed?"
+    severity: HIGH
+    hints:
+      - "Adding proration to a failing card raises the amount needed to leave dunning and sends a second failure email"
+    remediation: "Guard upgrade endpoints on past_due; allow scheduling a cheaper plan."
+
+  # --- Plan and period changes -------------------------------------------------------
+  - id: BILL-08
+    kind: rule
+    area: "Direction decided by tier rank, not price"
+    question: "Is upgrade vs downgrade classified by an explicit plan rank column, never by comparing prices?"
+    severity: HIGH
+    hints:
+      - "Grandfathered prices, admin repricing and promotions make price comparison wrong; the wrong direction also changes legal consequences (new withdrawal window or not)"
+      - "A plans table without a rank column is itself a finding"
+    remediation: "Add tier_rank; use price only as a last-resort tie-break."
+
+  - id: BILL-09
+    kind: policy
+    area: "Shortening a commitment is deferred"
+    question: "Is every shortening of the commitment (lower plan, shorter billing period, account close) deferred to the end of the paid period, even when the tier goes up (annual -> monthly)?"
+    severity: HIGH
+    hints:
+      - "Look for immediate plan writes on downgrade or period change"
+    remediation: "Schedule the change for the period end; the customer keeps what they paid for."
+
+  - id: BILL-10
+    kind: policy
+    area: "Upgrade charges immediately"
+    question: "Does an upgrade take effect immediately and invoice the difference immediately (no deferred proration)?"
+    severity: CRITICAL
+    hints:
+      - "Deferred proration lets a customer take the higher plan, use it, cancel before period end and pay the lower price"
+    remediation: "Invoice proration at the moment of upgrade and grant it on payment (BILL-01)."
+
+  - id: BILL-11
+    kind: policy
+    area: "No refunds and no credit outside statutory windows"
+    question: "Outside statutory withdrawal windows, does the system avoid both refunds and provider-side credit balances on plan changes?"
+    severity: HIGH
+    hints:
+      - "Credit is worse than a refund because it is invisible: money stays, nothing comes in for several cycles"
+      - "Operations that would leave a credit balance should be refused (409), not stored silently"
+    remediation: "Disable negative proration/credit; reject operations that would create credit."
+
+  - id: BILL-12
+    kind: policy
+    area: "Never silently override the user's choice"
+    question: "When the user's choice collides with deferral rules (e.g. annual lower plan -> monthly higher plan), are two explicit options with amount and date offered instead of a substituted third option?"
+    severity: HIGH
+    hints:
+      - "Example: 'Higher plan annual now - pay X' OR 'Higher plan monthly from <date>'"
+    remediation: "Present explicit alternatives; never convert the chosen period behind the scenes."
+
+  - id: BILL-13
+    kind: rule
+    area: "Local plan mirror changes when the change takes effect"
+    question: "For deferred changes, is the local plan written only when the change actually takes effect (period rollover webhook), with the UI showing current state plus the scheduled change?"
+    severity: HIGH
+    hints:
+      - "Anti-pattern: writing the future plan now 'because it will happen anyway'"
+    remediation: "Store pending_* fields; show 'Plan A until <date>, then Plan B'."
+
+  # --- Exits ----------------------------------------------------------------------
+  - id: BILL-14
+    kind: policy
+    area: "Downgrade to Free exists and creates a real state"
+    question: "If a Free plan exists, can the user downgrade to it as its own action (plan grid), and does the end of a paid subscription always create a valid Free/cancelled state rather than a blocked flag nobody can leave?"
+    severity: CRITICAL
+    hints:
+      - "Look for billing_blocked-style flags set without creating the target plan row; a paywall that rewrites the block on every request locks users out"
+      - "Compare with UI copy promising 'you will move to Free'"
+    remediation: "Downgrade is a plan choice in the same grid as upgrade; end-of-subscription transitions always land in a designed state."
+
+  - id: BILL-15
+    kind: policy
+    area: "Account closure is separated and gated"
+    question: "Is account closure outside the billing screen (danger zone), gated by re-entering the password (not a checkbox, not both), with an undo window and the deletion date shown above the password field?"
+    severity: MEDIUM
+    hints:
+      - "Twin buttons 'Downgrade' / 'Close account' next to each other produce wrong clicks"
+      - "Two dates: access end = end of paid period; deletion = max(access end, request + undo window). Show both only when they differ"
+    remediation: "Move closure to a danger zone with a password gate, undo window and both dates."
+
+  - id: BILL-16
+    kind: rule
+    area: "Export before deletion covers what is deleted"
+    question: "Before data disappears (downgrade retention, closure), can the user export exactly the data that will be deleted, from the UI?"
+    severity: HIGH
+    hints:
+      - "An export that skips the very table the retention job deletes is worse than none"
+    remediation: "Make the export cover every dataset a retention or closure path deletes."
+
+  # --- Limits on downgrade ------------------------------------------------------------
+  - id: BILL-17
+    kind: rule
+    area: "Downgrade shows limit from -> to and the right consequence"
+    question: "Does the downgrade screen state old and new limits, and distinguish overage billing (paid -> paid, data keeps flowing, costs money) from a hard cap (-> Free, data silently not ingested), based on whether the target plan has an overage price?"
+    severity: HIGH
+    hints:
+      - "Never one message for both; discriminate by overage price presence, never by plan name"
+      - "Severity by the customer's actual volume: below new limit = warning, above = critical"
+      - "A counter that is also used to enforce the cap shows the capped number; keep an uncapped informational counter"
+      - "Same for non-volume limits (projects, domains): say what happens to the excess before the downgrade"
+    remediation: "Render from/to limits and the consequence tied to overage pricing, using an uncapped counter."
+
+  - id: BILL-18
+    kind: policy
+    area: "No per-seat limits"
+    question: "Does pricing avoid limiting the number of users, differentiating plans by volume, retention, monitored objects or features instead?"
+    severity: MEDIUM
+    hints:
+      - "Seat limits push teams to share one login, destroying audit trail and offboarding"
+    remediation: "Remove seat caps; SSO may sit on higher plans."
+
+  # --- Customer emails --------------------------------------------------------------
+  - id: BILL-19
+    kind: rule
+    area: "An email for every money event"
+    question: "Is there a customer email for: first purchase (one email: purchase + payment + invoice link), renewal paid, payment failed (with grace end date), grace reminders, pre-renewal reminder (term from the contract terms), price change (separate), upgrade done (after payment), downgrade scheduled (sent at scheduling, not at effect), closure scheduled (both dates), refund?"
+    severity: HIGH
+    hints:
+      - "Data-loss warnings must go out at scheduling; for annual plans add a second one shortly before the date"
+      - "Link invoices, do not attach them (attachments couple sending to a fallible async generator)"
+    remediation: "Add the missing templates and triggers."
+
+  # --- Engineering invariants -----------------------------------------------------------
+  - id: BILL-29
+    kind: rule
+    area: "Operator notifications carry no PII"
+    question: "Do operator notifications (chat, customer-facing webhooks) contain only IDs and amounts, never tax IDs, addresses or names?"
+    severity: HIGH
+    hints:
+      - "Operators read the rest from the database"
+    remediation: "Strip PII from notifications."
+
+  - id: BILL-30
+    kind: rule
+    area: "Automate the common case, route the rare one to a human"
+    question: "For rare billing situations (unusual webhook order, unknown amount, provider unreachable during a refund), does the system detect 'cannot resolve safely' and route to support with a clear customer message, and do manual actions in the provider dashboard flow back through the same webhook path?"
+    severity: MEDIUM
+    hints:
+      - "Code that 'handles' an unknown case by guessing is worse than an explicit handoff"
+      - "Test for rare cases = 'reaches a human with a clear message', not 'handled correctly'"
+    remediation: "Add an explicit manual-handling state and verify dashboard actions are ingested by the normal handlers."
+
+  # --- Tests -------------------------------------------------------------------------
+  - id: BILL-33
+    kind: rule
+    area: "Real billing E2E"
+    question: "Do billing changes ship with an E2E run against the provider's test mode with simulated time (e.g. test clocks), covering checkout, upgrade, scheduled downgrade at the moment it takes effect, billing-period change, VAT-ID revocation before renewal, refund after withdrawal and a multi-line invoice, each with a strict DB delta (exactly the expected rows, nothing else)?"
+    severity: HIGH
+    hints:
+      - "After every plan change assert the NEXT invoice has VAT on every line, not only the checkout"
+      - "Refund assertions compare with the provider's amount_paid"
+    remediation: "Add the missing scenarios to the billing E2E suite."

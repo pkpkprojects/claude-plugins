@@ -1,0 +1,133 @@
+name: Mobile Release & Store Compliance
+version: "1.0"
+applies_when: {}
+severity_default: HIGH
+
+checks:
+  - id: MOB-REL-01
+    area: "Secrets not in app bundle"
+    question: "Are API keys, backend secrets, or signing credentials absent from the compiled app bundle (source, assets, or --dart-define baked into a committed script)?"
+    severity: CRITICAL
+    kind: rule
+    hints:
+      - "Grep for hardcoded API keys/tokens in lib/, assets/, or committed .env-style files bundled as assets"
+      - "Check that server-side-only secrets aren't reachable by decompiling the APK/IPA"
+    remediation: "Move server-side secrets out of the client entirely; only ship client-safe, scoped keys (e.g. a public API key meant for client use) and enforce authorization server-side."
+
+  - id: MOB-REL-02
+    area: "Tokens in Keychain/Keystore"
+    question: "Are auth tokens and other sensitive credentials stored in flutter_secure_storage (Keychain/Keystore-backed), not SharedPreferences/plain files?"
+    severity: CRITICAL
+    kind: rule
+    hints:
+      - "Grep for SharedPreferences or file writes storing token/auth/session strings"
+      - "Check for flutter_secure_storage usage on the auth token path"
+    remediation: "Store tokens and credentials via flutter_secure_storage (or platform Keychain/Keystore directly), never in SharedPreferences or plaintext files."
+
+  - id: MOB-REL-03
+    area: "Certificate pinning decision"
+    question: "Has certificate/public-key pinning been explicitly decided for sensitive API traffic (adopted with a rotation plan, or consciously skipped and documented), rather than left undecided?"
+    severity: MEDIUM
+    kind: policy
+    hints:
+      - "Search for pinning config (e.g. http package HttpClient badCertificateCallback misuse, dio interceptors, or a pinning package)"
+    remediation: "Decide and document whether certificate pinning is required for this app's threat model; if adopted, define a pin-rotation process so an expired pin can't lock out all users."
+
+  - id: MOB-REL-04
+    area: "No PII in logs/crash reports"
+    question: "Do logging and crash-reporting calls avoid sending PII (email, name, tokens, medical/financial data) in plain text?"
+    severity: CRITICAL
+    kind: rule
+    hints:
+      - "Grep for print()/log()/debugPrint() calls including user objects or tokens"
+      - "Check crash reporter (Crashlytics/Sentry) breadcrumbs/custom keys for raw PII fields"
+    remediation: "Redact or omit PII from logs and crash breadcrumbs; log user identifiers as opaque IDs, not raw personal data."
+
+  - id: MOB-REL-05
+    area: "Obfuscation and symbol upload"
+    question: "Is the release build obfuscated (--obfuscate --split-debug-info for Flutter) with the resulting symbols/dSYMs/mapping files uploaded to the crash reporter?"
+    severity: HIGH
+    kind: rule
+    hints:
+      - "Check the release build command/CI config for --obfuscate and --split-debug-info"
+      - "Check for a symbol-upload step (Crashlytics/Sentry) after each release build"
+    remediation: "Build release with --obfuscate --split-debug-info=<dir>, and upload the generated symbols/dSYMs/mapping.txt to the crash reporter as part of the release pipeline, or the next crash is unsymbolicated hex."
+
+  - id: MOB-REL-06
+    area: "Signing keys not in repo"
+    question: "Are keystore files, provisioning profiles, and signing certificates kept out of the git repository, sourced from a secrets manager or CI secret store instead?"
+    severity: CRITICAL
+    kind: rule
+    hints:
+      - "Grep for .jks/.keystore/.p12/.mobileprovision files tracked in git"
+      - "Check key.properties or similar for hardcoded passwords committed to the repo"
+    remediation: "Remove signing artifacts from git history, rotate any exposed keys, and load them from CI secrets or a secrets manager at build time."
+
+  - id: MOB-REL-07
+    area: "Monotonic version/build number"
+    question: "Is the build number (versionCode / CFBundleVersion) bumped automatically and monotonically per release, never reused or hand-edited backwards?"
+    severity: HIGH
+    kind: rule
+    hints:
+      - "Check pubspec.yaml version bump process and whether it's manual or CI-automated"
+      - "Look for any case where build number could go backwards after a hotfix branch"
+    remediation: "Automate the build-number bump in CI from a single source of truth (e.g. commit count or CI run number), never edited by hand."
+
+  - id: MOB-REL-08
+    area: "Phased rollout + halt criteria"
+    question: "Does production release go out via phased/staged rollout percentage with a defined halt threshold (crash-free rate, ANR rate), instead of shipping straight to 100%?"
+    severity: HIGH
+    kind: policy
+    hints:
+      - "Check Play Console staged rollout config and App Store phased release settings"
+      - "Look for a documented halt/pause threshold, not just 'watch dashboards'"
+    remediation: "Ship via staged rollout (start low, e.g. 1-5%), define a numeric halt criterion (e.g. crash-free < 99.5%), and have a documented pause/rollback owner for the rollout window."
+
+  - id: MOB-REL-09
+    area: "Crash-free threshold gate"
+    question: "Is there a defined crash-free-sessions threshold that gates rollout expansion, rather than expanding on a fixed timer regardless of crash health?"
+    severity: MEDIUM
+    kind: policy
+    hints:
+      - "Look for release process docs or CI gates referencing crash-free rate before widening rollout"
+    remediation: "Gate each rollout expansion step on crash-free rate/ANR rate meeting a defined threshold, not just elapsed time."
+
+  - id: MOB-REL-10
+    area: "Forced update / min-supported-version path"
+    question: "When a breaking backend API change ships, is there a forced-update or minimum-supported-version mechanism so old app versions still in the field don't break against the new API?"
+    severity: HIGH
+    kind: rule
+    hints:
+      - "Search for a remote min-version check / force-update dialog"
+      - "Check whether the backend maintains compatibility for at least one prior app version, or old clients get hard errors"
+    remediation: "Add a remote-config-driven minimum supported version check that prompts/forces update, and keep the backend backward compatible for at least one previous release until adoption catches up."
+
+  - id: MOB-REL-11
+    area: "Account deletion in-app"
+    question: "Can a user delete their account entirely from within the app (not only via a web page or support email), as required by Apple 5.1.1(v) and Google Play?"
+    severity: CRITICAL
+    kind: rule
+    hints:
+      - "Search settings/account screens for a delete-account flow"
+      - "Check it actually triggers backend deletion, not just local sign-out"
+    remediation: "Add an in-app account deletion flow reachable from account settings that triggers real backend account/data deletion."
+
+  - id: MOB-REL-12
+    area: "Sign in with Apple parity"
+    question: "If the app offers third-party social login (Google, Facebook, etc.) on iOS, does it also offer Sign in with Apple as required by App Review guideline 4.8?"
+    severity: HIGH
+    kind: rule
+    hints:
+      - "Check login screen for Google/Facebook sign-in buttons on iOS without an accompanying Apple sign-in option"
+    remediation: "Add Sign in with Apple alongside any other social login option offered on iOS."
+
+  - id: MOB-REL-13
+    area: "Store-side purchase mechanics"
+    question: "Are in-app purchases validated server-side against StoreKit/Play Billing receipts, with a working restore-purchases action and a link to the platform's subscription-management screen?"
+    severity: HIGH
+    kind: rule
+    hints:
+      - "Look for server-side receipt/purchase-token validation, not client-only trust of a purchase success callback"
+      - "Check for a visible 'Restore Purchases' button and a deep link to manage subscriptions (App Store / Play subscription settings)"
+      - "Payment/pricing policy itself (pricing, disclosures, refund rules) is out of scope here; billing-reviewer owns that"
+    remediation: "Validate every purchase/subscription receipt server-side, expose a Restore Purchases action, and link out to the store's subscription management screen."

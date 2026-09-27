@@ -1,0 +1,103 @@
+name: Database migrations and schema changes
+version: "1.0"
+applies_when: {}
+severity_default: HIGH
+
+checks:
+  - id: INFRA-MIG-01
+    area: "Expand/contract pattern"
+    question: "Are destructive schema changes (drop column, drop table, rename, type narrowing) deferred until all readers/writers of the old shape are gone, with an additive step shipped first?"
+    severity: CRITICAL
+    kind: rule
+    hints:
+      - "Look for migrations that drop or rename a column/table in the same deploy that also removes the last code reference to it"
+      - "Check migration file names/order for a 'contract' step with no preceding 'expand' step"
+    remediation: "Split into two deploys: (1) add the new column/table, dual-write or backfill, deploy code that reads the new shape; (2) only after all readers are migrated, drop the old column/table in a later migration."
+
+  - id: INFRA-MIG-02
+    area: "Backward compatibility with running app version"
+    question: "Does the migration stay compatible with the currently deployed application code during a rolling deploy (old code + new schema, and new code + old schema, both work)?"
+    severity: CRITICAL
+    kind: rule
+    hints:
+      - "Check if a column is made NOT NULL without a default while old code may still insert rows without it"
+      - "Check if a column/table required by new code is created in the same transaction as the code that depends on it goes live"
+    remediation: "Add new columns as nullable or with a default first. Only enforce NOT NULL/constraints after a backfill and after old code stops writing without the value."
+
+  - id: INFRA-MIG-03
+    area: "Backward compatibility with older API clients"
+    question: "If external/mobile clients may run old app versions for an extended period, does the migration and any API contract change stay compatible with them?"
+    severity: CRITICAL
+    kind: policy
+    hints:
+      - "Look for removed/renamed API fields or endpoints tied to this migration"
+      - "Check for a documented API version or field deprecation window"
+    remediation: "Keep old fields/endpoints functional (deprecated, not removed) for a documented support window covering the oldest client version still in the field. Version the API or use additive fields instead of breaking changes."
+
+  - id: INFRA-MIG-04
+    area: "Lock duration on large tables"
+    question: "Does the migration avoid long-held locks on large/hot tables (e.g. via online/concurrent index creation, batched backfills, short-lock DDL)?"
+    severity: CRITICAL
+    kind: rule
+    hints:
+      - "Search for CREATE INDEX without CONCURRENTLY (Postgres) or equivalent non-online DDL on a table expected to be large"
+      - "Search for a single UPDATE/backfill statement touching an entire large table instead of batches"
+    remediation: "Use online/concurrent index creation. Backfill in small batches with a delay/throttle between batches, and make the backfill resumable if interrupted."
+
+  - id: INFRA-MIG-05
+    area: "Idempotency / re-runnability"
+    question: "Can the migration be safely re-run (e.g. after a partial failure or redeploy) without erroring or corrupting data?"
+    severity: HIGH
+    kind: rule
+    hints:
+      - "Check for IF NOT EXISTS / IF EXISTS guards, or a migration framework that tracks applied state"
+      - "Check backfill scripts for a WHERE clause that skips already-migrated rows"
+    remediation: "Guard DDL with existence checks. Make backfills idempotent (skip rows already at target state) so a retry after failure is safe."
+
+  - id: INFRA-MIG-06
+    area: "Tested against production-shaped data"
+    question: "Was the migration validated against a copy of production-shaped data (volume and data quality), not just an empty or synthetic dev database?"
+    severity: HIGH
+    kind: policy
+    hints:
+      - "Look for a staging/test run note, timing numbers, or a dry-run log referenced in the PR/plan"
+      - "No evidence at all of pre-prod validation for a migration touching a large or critical table"
+    remediation: "Run the migration against a representative copy (anonymized/synthetic-at-scale) of production data before shipping. Record timing and lock behavior."
+
+  - id: INFRA-MIG-07
+    area: "Rollback story"
+    question: "Is there a stated rollback plan for this migration (a down-migration, a compensating script, or an explicit 'not reversible, here is the mitigation' note)?"
+    severity: HIGH
+    kind: rule
+    hints:
+      - "Check for an accompanying down/rollback migration"
+      - "Check the plan/PR description for a rollback section"
+    remediation: "Write a down-migration where feasible. Where a migration is genuinely irreversible (e.g. destructive data change), document that explicitly along with the mitigation (backup snapshot, feature flag to disable the dependent feature)."
+
+  - id: INFRA-MIG-08
+    area: "Fresh-install scripts never run against live data"
+    question: "Are database init/bootstrap scripts (used for a brand-new install) guarded so they cannot accidentally run against an existing database volume, and are role/grant changes applied via a separate idempotent script for live clusters?"
+    severity: CRITICAL
+    kind: rule
+    hints:
+      - "Search for init.sql/entrypoint scripts run unconditionally on container start"
+      - "Search for CREATE ROLE/GRANT statements only present in a fresh-install script with no equivalent for an already-running cluster"
+    remediation: "Guard fresh-install scripts to run only on an empty/uninitialized database (check a marker table or rely on the DB image's own first-run semantics). Ship role/grant changes for live clusters as a separate, idempotent migration that can run against an existing database."
+
+  - id: INFRA-MIG-09
+    area: "Multi-environment role/permission differences"
+    question: "If role or grant definitions differ between environments (dev/staging/prod), is that difference intentional and documented rather than accidental drift?"
+    severity: MEDIUM
+    kind: policy
+    hints:
+      - "Compare role/grant definitions across environment-specific config or scripts, if present"
+    remediation: "Document why an environment's roles differ (e.g. prod has stricter least-privilege grants). Keep the base schema/role definitions in one shared source and layer environment-specific grants on top, rather than maintaining divergent copies."
+
+  - id: INFRA-MIG-10
+    area: "Time zone storage"
+    question: "Are new timestamp columns stored in UTC (or an explicitly timezone-aware type), rather than an implicit local time zone?"
+    severity: MEDIUM
+    kind: rule
+    hints:
+      - "Search new migrations for TIMESTAMP WITHOUT TIME ZONE or equivalent naive timestamp types"
+    remediation: "Use a timezone-aware timestamp type, or store UTC explicitly with the convention documented, so all readers agree on interpretation."

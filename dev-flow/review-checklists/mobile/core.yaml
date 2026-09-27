@@ -1,0 +1,104 @@
+name: Mobile Core Reliability
+version: "1.0"
+applies_when: {}
+severity_default: HIGH
+
+checks:
+  - id: MOB-CORE-01
+    area: "Local DB schema migration"
+    question: "Does every local-DB schema change ship a migration that runs safely against a real upgrade from the previous shipped version, not just a fresh install?"
+    severity: CRITICAL
+    kind: rule
+    hints:
+      - "Look for Isar schema versioning, Drift migration strategy, sqflite onUpgrade, or Hive adapter typeId changes"
+      - "Check if a migration is missing when a model/table/field changed since the last release"
+      - "Check for destructive migrations (drop+recreate) that silently discard existing user data"
+    remediation: "Add an explicit migration step for the new schema version and test it by opening a DB seeded with the previous version's data, not just a blank DB."
+
+  - id: MOB-CORE-02
+    area: "Queued writes survive app kill"
+    question: "Do writes queued for later sync (outbox, pending-actions table) survive a process kill or crash before the sync completes?"
+    severity: CRITICAL
+    kind: rule
+    hints:
+      - "Look for an in-memory-only queue (List/Stream held in a provider/bloc with no persisted backing)"
+      - "Check that queued items are written to local DB before returning success to the UI"
+    remediation: "Persist queued mutations to local storage before acknowledging success to the user; replay unsent items on next app start."
+
+  - id: MOB-CORE-03
+    area: "Idempotent sync replay"
+    question: "If a queued item is retried after a partial failure (e.g. server received it but the ack was lost), does replay avoid creating a duplicate or corrupting state?"
+    severity: CRITICAL
+    kind: rule
+    hints:
+      - "Look for a client-generated idempotency key / UUID sent with each mutation"
+      - "Check server-side dedup on that key, not just client-side removal from the queue"
+    remediation: "Generate a stable client-side id per queued mutation and send it with every retry; require the backend to dedup on that id."
+
+  - id: MOB-CORE-04
+    area: "Conflict handling"
+    question: "When the same record was modified both offline on-device and on the server (or another device) since last sync, is there a defined conflict rule rather than silent overwrite?"
+    severity: HIGH
+    kind: rule
+    hints:
+      - "Look for last-write-wins based on device clock (unsafe, see MOB-CORE-05) vs a version/revision counter"
+      - "Check whether conflicting writes are surfaced to the user or merged deterministically"
+    remediation: "Use a server-assigned version/revision counter for optimistic concurrency, and define what happens on conflict (reject, merge, or prompt) rather than defaulting to whichever write arrives last."
+
+  - id: MOB-CORE-05
+    area: "Clock skew"
+    question: "Does any sync/ordering/conflict logic depend on the device's local clock instead of a server-issued timestamp or monotonic counter?"
+    severity: HIGH
+    kind: rule
+    hints:
+      - "Search for DateTime.now() used to order sync events, timestamp records for conflict resolution, or expire tokens/caches"
+    remediation: "Use server-issued timestamps or a monotonically increasing version for ordering and conflict decisions; treat device clock as untrusted."
+
+  - id: MOB-CORE-06
+    area: "No data loss on logout/account switch"
+    question: "On logout or account switch, are unsynced local writes flushed or explicitly discarded with user confirmation, rather than silently wiped or left orphaned under the wrong account?"
+    severity: CRITICAL
+    kind: rule
+    hints:
+      - "Look for logout handlers that clear the local DB/box unconditionally"
+      - "Check whether pending queue items are synced before wipe, or the user is warned about unsynced changes"
+    remediation: "Block or confirm logout when unsynced writes are pending, and scope local storage per-account so switching accounts cannot mix or lose data."
+
+  - id: MOB-CORE-07
+    area: "Dormant/stuck queue items (time axis)"
+    question: "Is there a bounded retry policy and staleness detection for queue items that fail repeatedly, so an item cannot sit unsynced indefinitely without surfacing?"
+    severity: HIGH
+    kind: rule
+    hints:
+      - "Look for unbounded retry loops with no backoff cap or max-age check"
+      - "Check for any alerting/telemetry on items stuck > 24h"
+    remediation: "Cap retries with backoff, and surface (log or notify) items still unsynced after a defined age threshold instead of retrying silently forever."
+
+  - id: MOB-CORE-08
+    area: "Fresh vs dirty install test coverage"
+    question: "Do the mutating E2E tests for offline/sync features cover both a fresh install and an upgrade from the prior store version with real persisted data and stale queues?"
+    severity: CRITICAL
+    kind: rule
+    hints:
+      - "Look for test setup that only ever creates a fresh DB/state"
+      - "Look for an upgrade-path test fixture seeded from a previous schema version"
+    remediation: "Add an upgrade-path E2E test seeded with previous-version data and a stale queue item, in addition to the fresh-install test."
+
+  - id: MOB-CORE-09
+    area: "E2E asserts backend DB state"
+    question: "Does every mutating E2E test assert the final state in the real backend (via an inspect/read-back endpoint or DB query), not only the on-screen UI state?"
+    severity: CRITICAL
+    kind: rule
+    hints:
+      - "Look for tests that only check a widget disappeared or a snackbar text, without a follow-up API/DB read"
+      - "Optimistic UI can show success while the backend call actually 404s or no-ops"
+    remediation: "After the mutating action, read back the record from the real backend (API or test-only inspect endpoint) and assert its persisted state."
+
+  - id: MOB-CORE-10
+    area: "Settle helpers / extra pumps as race smell"
+    question: "Do any test helpers add extra pump()/delayed(zero)/sleep calls purely to make a flaky test pass, without a comment justifying the race is benign?"
+    severity: MEDIUM
+    kind: rule
+    hints:
+      - "Grep for pumpAndSettle with unusually long durations, Future.delayed(Duration.zero) in test helpers, or repeated pump() calls with no comment"
+    remediation: "Investigate the underlying race in production code first; only keep the extra pump with a comment proving the race is benign, otherwise fix the root cause."

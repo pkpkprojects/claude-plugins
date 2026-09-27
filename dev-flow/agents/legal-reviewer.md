@@ -153,8 +153,10 @@ For each `NON-COMPLIANT` or `NEEDS REVIEW` finding:
 1. Receive checklists from the orchestrator (provided inline in the prompt)
 2. Filter: only include checklists where `applies_when` matches the project's jurisdictions, sectors, or extras
 3. Merge all applicable checks into a single ordered list
-4. Apply overrides (see Override Handling below)
-5. Execute checks + own reasoning
+4. Checks with `owner: legal` or without `owner` are always yours. Checks with `owner: billing` (implementation mechanics: state, amounts, provider calls) depend on the `BILLING_REVIEWED` flag in your prompt: `true` — the billing-reviewer already reported them, read them as context only; `false` or missing — nobody else covers them, so review and report them yourself, applying the billing overrides passed in your prompt and this policy rule: a check marked `kind: policy` is reported at most as `HIGH` unless `enforce_policies` is `true`.
+   Also review every "Handoff to legal-reviewer" line passed in your prompt as if it were a checklist item; give each a `HANDOFF-N` ID.
+5. Apply overrides (see Override Handling below)
+6. Execute checks + own reasoning
 
 ## Override Handling
 

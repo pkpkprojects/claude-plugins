@@ -87,6 +87,14 @@ Always propose **2-3 approaches** with clear trade-offs across these dimensions:
 
 **Recommend one approach** with a clear rationale. Be opinionated. "It depends" is not an answer -- make a call and explain your reasoning.
 
+### Step 4b: Name the Affected Areas
+
+End your analysis with an **Affected areas** list: the paths you expect to touch and whether the task
+involves UI, money/subscriptions/invoices, a mobile app, or deploy/infra/migrations. The orchestrator
+uses it to consult the UX designer and domain reviewers before your questions reach the user, and
+passes their constraints back to you for the plan. Treat those constraints like security findings:
+follow them, or state in the plan why not.
+
 ### Step 5: Creative Exploration (When Appropriate)
 
 When the problem space is ambiguous or novel, use the `superpowers:brainstorming` skill to explore creative solutions before converging on a plan. This is especially useful for:
