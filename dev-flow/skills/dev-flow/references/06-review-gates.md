@@ -2,15 +2,16 @@
 
 After the implementer completes, dispatch a **security-reviewer agent** as a team member:
 
-**Step 5c.1: Gather the diff**
+**Step 5c.1: Resolve the diff range (do NOT paste the diff)**
 
-Use `Bash` to capture the git diff of the implementation:
-
-```bash
-git diff HEAD~1 HEAD
-```
-
-If the implementer made multiple commits, adjust the range to capture all changes from this phase. Use `git log --oneline -10` to determine the correct range.
+Per the Context Contract (`references/10-agent-dispatch-and-flow.md`), reviewers receive a reference,
+not code. Set `PHASE_HEAD` with `git rev-parse HEAD` (or the slot's last commit when slots run in parallel) and
+use the `PHASE_BASE` recorded before the implementer was dispatched (Step 5b), so
+`DIFF_RANGE = PHASE_BASE..PHASE_HEAD -- <files_to_touch of this phase>` (plus `-- <sub-project path>`
+in a monorepo). Read both SHAs from the header of `phase-N-implementation.md`. If they are absent
+(resumed session), ASK THE USER for them; never guess from `git log`. For parallel slots, dispatch
+reviewers per slot, or once on the union of the scoped paths.
+Verify with `git diff --stat DIFF_RANGE`. Never summarize or paraphrase the diff.
 
 **Step 5c.2: Dispatch security-reviewer**
 
@@ -28,12 +29,15 @@ name: "security-reviewer"
    {SEC_N}. Follow the Step 5.0c task lifecycle contract. Review the following code changes for
    security vulnerabilities."
 
-2. **The git diff**: The complete diff output from Step 5c.1.
+2. **Diff scope**: `DIFF_RANGE: <base_sha>..<head_sha>` and the instruction "run `git diff` / `git show`
+   for this range yourself and Read any repo file you need". Do NOT include the implementer's report,
+   summary or claims.
 
-3. **Project context**:
+3. **Security profile**:
    - `project.type`
    - `project.stack`
-   - Brief description of what this phase implements
+   - Trust boundaries and auth model, copied verbatim from config/plan (state "not documented" if absent)
+   - The phase title (verbatim from the plan); no implementer narrative
 
 4. **Security checks from RESOLVED_CHECKS**: Include the full `security` section from checks.yaml, but only checks where `run: true`. Format each check with its id, name, scope, and rules.
 
@@ -97,7 +101,11 @@ domain in `DOMAIN_REVIEWS`.
    - **First line**: `Agent references dir: <abs path>` (SKILL.md invariant 8).
    - Role and task assignment: "You are the {domain}-reviewer agent. Your assigned task ID is
      {DOM_N_domain}. Follow the Step 5.0c task lifecycle contract. Use Mode 2: Code Review."
-   - The complete git diff and the phase description
+   - `DIFF_RANGE` plus the domain-filtered path list (`git diff --name-only DIFF_RANGE` matched against
+     the domain's `triggers`); the reviewer runs `git diff DIFF_RANGE -- <those paths>` itself. Also the
+     names-only list `git diff --name-only DIFF_RANGE` (paths, not content) so it can Read what it
+     needs or return `BLOCKED` for cross-domain changes. Plus the
+     relevant plan section (the phase's `#### Phase N:` block, verbatim). No other diff, no implementer report.
    - The domain config serialized as YAML (including `overrides`)
    - The domain's checklists in full (for billing: plus the shared legal subscription checklists)
    - `project.type`, `project.stack`, `project.name`
@@ -137,9 +145,19 @@ name: "legal-reviewer"
    Follow the Step 5.0c task lifecycle contract. Review the following code changes for legal
    compliance. Use Mode 2: Code/Feature Review."
 
-2. **The git diff**: Complete diff output (same as gathered for security review).
+2. **Legal fact base (mechanical, no full diff)**: the plan's phase block (verbatim); `DIFF_RANGE`;
+   the data-model/schema change paths (`git diff --name-only DIFF_RANGE` matched against
+   migration/schema/entity globs from config, else the plan's data-model section); the dependency
+   changes (`git diff DIFF_RANGE -- <manifest and lockfile paths>`: SDKs, analytics); the user groups
+   (e.g. minors) and the data-collection points listed in the plan/config, copied verbatim. The
+   reviewer may Read any repo path it names. For the FINAL phase (and any phase whose paths match the
+   legal globs) also pass the mechanical cumulative pass `git diff {start_commit}..HEAD -- <legal globs>`
+   (default globs: consent, cookie, privacy, i18n/copy, retention, analytics, age/dob paths;
+   override with `legal.final_pass_globs`). If these facts are insufficient it must return `BLOCKED`
+   listing the missing facts (then add them and resume the same task). Do NOT paste the UI/logic diff
+   or include the implementer's report.
 
-3. **Phase description**: What this phase implements.
+3. **Phase description**: The phase title and description, verbatim from the plan.
 
 4. **Legal configuration**: Full `LEGAL_CONFIG` serialized as YAML.
 
@@ -207,9 +225,9 @@ Parse the legal reviewer's output:
 
 After security, legal and domain reviews pass, dispatch an **acceptance-reviewer agent** as a team member:
 
-**Step 5d.1: Gather the diff**
+**Step 5d.1: Resolve the diff range**
 
-Same as Step 5c.1 -- capture the git diff for this phase's changes.
+Same as Step 5c.1 -- `DIFF_RANGE` for this phase (including fix commits). Never paste the diff.
 
 **Step 5d.2: Dispatch acceptance-reviewer**
 
@@ -227,7 +245,9 @@ name: "acceptance-reviewer"
    {ACC_N}. Follow the Step 5.0c task lifecycle contract. Verify that the implementation meets all
    acceptance criteria and quality standards."
 
-2. **The git diff**: The complete diff output.
+2. **Diff scope**: `DIFF_RANGE: <base_sha>..<head_sha>`; the reviewer runs `git diff` for it itself.
+   Do NOT include the implementer's report, reasoning, self-claims or test results, the architect's
+   rationale, the full plan, or other gates' verdicts: verification must be independent.
 
 3. **Phase acceptance criteria**: The exact acceptance criteria stored in the assigned acceptance
    task, copied verbatim from the approved plan. Instruct the reviewer to map every criterion to
@@ -235,7 +255,8 @@ name: "acceptance-reviewer"
 
 4. **Full RESOLVED_CHECKS**: All checks from checks.yaml (standard + security + optional where `run: true`), fully resolved with inheritance. Include check ids, names, commands, and rules.
 
-5. **Project configuration**: Full `RESOLVED_CONFIG` serialized as YAML.
+5. **How to run checks**: the test and lint commands (and build command when configured) from
+   `RESOLVED_CHECKS`/config, plus `project.type` and `project.stack`.
 
 6. **Extra instructions**: The value of `agents.acceptance-reviewer.extra_instructions` from config.
 
@@ -252,13 +273,13 @@ name: "acceptance-reviewer"
    **Verdict: PASS | FAIL | BLOCKED**
 
    ### Acceptance Criteria
-   For each criterion from the plan:
-   - **[Criterion text]**: PASS | FAIL | BLOCKED
-     - Evidence: [independently observed command/result, runtime behavior, or file:line]
+   MANDATORY evidence matrix, one row per criterion from the plan (row = **[Criterion text]**: PASS | FAIL | BLOCKED, with evidence):
+   | Criterion | Verdict (PASS/FAIL/BLOCKED) | Command | Exit code | Output (last ~10 lines) | file:line |
 
    ### Check Results
    For each active check:
    - **[check_id]** ([check_name]): PASS | FAIL | SKIP
+     - Command, exit code, output tail (last ~10 lines) for every tests/lint/build run
      - [Details or findings]
 
    ### Code Quality Notes

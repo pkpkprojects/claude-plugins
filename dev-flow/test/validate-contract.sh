@@ -185,8 +185,72 @@ grep -q 'what was skipped or not checked' "$IMPL"
 grep -q 'TDD rules (Core Philosophy) stay intact and win on any conflict' "$IMPL"
 test "$(awk '/^## Smallest complete change$/{f=1;next} f&&/^## /{exit} f&&NF' "$IMPL" | wc -l)" -le 8
 
+# Context contract (minimum context per agent, mechanical filtering, evidence for PM).
+REF10="$SKILL_DIR/references/10-agent-dispatch-and-flow.md"
+PROMPTS="$SKILL_DIR/prompts"
+grep -q '^## Context Contract (single source of truth)$' "$REF10" || { echo "contract table missing"; exit 1; }
+for row in architect ux-designer implementer 'security-reviewer (code)' 'security-reviewer (plan)' acceptance-reviewer legal-reviewer 'billing/mobile/infra reviewers' documentation-maintainer devops-monitor pm; do
+    grep -qF "| $row |" "$REF10" || { echo "contract row missing: $row"; exit 1; }
+done
+grep -q 'Context Contract' "$SKILL_MAIN" || { echo "SKILL.md lacks contract pointer"; exit 1; }
+grep -q 'return `BLOCKED` listing exactly' "$REF10" || grep -q 'returns `BLOCKED` listing exactly' "$REF10" || { echo "contract lacks BLOCKED rule"; exit 1; }
+# Independent reviewers: diff by range, never implementer report/self-report inputs.
+for f in "$PROMPTS/acceptance-prompt.md" "$PROMPTS/security-prompt.md"; do
+    grep -q '{{diff_range}}' "$f" || { echo "$f lacks diff_range placeholder"; exit 1; }
+    ! grep -qiE '\{\{[a-z_]*(implementer|self_?report|impl_report)[a-z_]*\}\}' "$f" || { echo "$f has implementer report placeholder"; exit 1; }
+    ! grep -q '{{git_diff}}' "$f" || { echo "$f pastes diff"; exit 1; }
+done
+python3 - "$SKILL_DIR/references/06-review-gates.md" <<'PY2'
+import re, sys
+t = open(sys.argv[1]).read()
+for name, start in (("security", "**Step 5c.2: Dispatch security-reviewer**"), ("acceptance", "**Step 5d.2: Dispatch acceptance-reviewer**")):
+    blk = t[t.index(start):]
+    blk = blk[:blk.index("**Step 5", 10)]
+    assert "DIFF_RANGE" in blk, f"{name} dispatch lacks DIFF_RANGE"
+    assert "Do NOT include the implementer" in blk, f"{name} dispatch lacks implementer exclusion"
+    assert "The complete diff" not in blk and "complete diff output" not in blk.lower(), f"{name} dispatch pastes diff"
+PY2
+grep -q 'may Read any repo path' "$SKILL_DIR/references/06-review-gates.md" || { echo "legal dispatch lacks repo-read permission"; exit 1; }
+grep -q 'must return `BLOCKED`' "$SKILL_DIR/references/06-review-gates.md" || { echo "legal dispatch lacks BLOCKED rule"; exit 1; }
+grep -q 'domain-filtered path list' "$SKILL_DIR/references/06-review-gates.md" || { echo "domain dispatch not path-filtered"; exit 1; }
+for a in acceptance security legal billing mobile infra; do
+    grep -q '^## Context contract$' "$ROOT/dev-flow/agents/$a-reviewer.md" || { echo "$a-reviewer lacks Context contract"; exit 1; }
+done
+# PM evidence requirement (core + prompt + dispatch).
+grep -q 'Missing or unverifiable' "$ROOT/dev-flow/agents/pm.md" || { echo "pm core lacks evidence rule"; exit 1; }
+grep -q 'per-criterion evidence' "$ROOT/dev-flow/agents/pm.md" || { echo "pm core lacks criterion matrix"; exit 1; }
+grep -q 'EVIDENCE RULE' "$PROMPTS/pm-prompt.md" || { echo "pm prompt lacks EVIDENCE RULE"; exit 1; }
+grep -q '{{acceptance_evidence}}' "$PROMPTS/pm-prompt.md" || { echo "pm prompt lacks evidence placeholder"; exit 1; }
+grep -q 'Missing or unverifiable evidence is BLOCKED, never PASS' "$SKILL_DIR/references/08-docs-pm-completion.md" || { echo "PM dispatch lacks evidence rule"; exit 1; }
+grep -q '^## Final Pipeline Report$' "$SKILL_DIR/references/08-docs-pm-completion.md" || grep -q '## Final Pipeline Report' "$SKILL_DIR/references/08-docs-pm-completion.md"
+
 plugin_version="$(jq -r '.version' "$PLUGIN")"
 marketplace_version="$(jq -r '.plugins[] | select(.name == "dev-flow") | .version' "$MARKETPLACE")"
 test "$plugin_version" = "$marketplace_version"
 
+grep -q '^### Acceptance Criteria$' "$ROOT/dev-flow/agents/acceptance-reviewer.md" || { echo "acceptance agent lacks evidence matrix section"; exit 1; }
+for f in "$ROOT/dev-flow/agents/acceptance-reviewer.md" "$SKILL_DIR/prompts/acceptance-prompt.md" "$SKILL_DIR/references/06-review-gates.md"; do
+    grep -q 'Exit code\|exit code' "$f" && grep -q 'last ~10 lines' "$f" || { echo "$f lacks evidence matrix fields"; exit 1; }
+done
+grep -q 'Acceptance Criteria` section' "$SKILL_DIR/references/08-docs-pm-completion.md" || { echo "08 lacks matrix pointer"; exit 1; }
+grep -q 'Acceptance Criteria` ' "$ROOT/dev-flow/agents/pm.md" || { echo "pm lacks matrix pointer"; exit 1; }
+grep -q 'FAST command' "$SKILL_DIR/references/08-docs-pm-completion.md" || { echo "08 lacks fast-only spot-check"; exit 1; }
+grep -q 'ASK THE USER' "$SKILL_DIR/references/06-review-gates.md" || { echo "06 lacks ask-user on missing PHASE_BASE"; exit 1; }
+! grep -q 'git log --oneline -20' "$SKILL_DIR/references/06-review-gates.md" || { echo "06 has git log heuristic"; exit 1; }
+grep -q -- '-- <files_to_touch of that slot/phase>' "$REF10" || { echo "contract lacks path-scoped DIFF_RANGE"; exit 1; }
+grep -q 'sub-project path' "$REF10" || { echo "contract lacks monorepo scope"; exit 1; }
+grep -q 'header of `phase-N-implementation.md`' "$REF10" || { echo "contract lacks PHASE_BASE persistence"; exit 1; }
+grep -q 'authz middleware' "$ROOT/dev-flow/agents/security-reviewer.md" || { echo "security agent lacks caller/authz grep"; exit 1; }
+grep -q 'authz middleware' "$SKILL_DIR/prompts/security-prompt.md" || { echo "security prompt lacks caller/authz grep"; exit 1; }
+grep -q 'git diff {start_commit}..HEAD -- <legal globs>' "$REF10" || { echo "contract lacks legal final pass"; exit 1; }
+grep -q 'git diff {start_commit}..HEAD -- <legal globs>' "$SKILL_DIR/references/06-review-gates.md" || { echo "06 lacks legal final pass"; exit 1; }
+grep -q 'git diff {start_commit}..HEAD -- <legal globs>' "$ROOT/dev-flow/agents/legal-reviewer.md" || { echo "legal agent lacks final pass"; exit 1; }
+grep -q 'final_pass_globs' "$ROOT/dev-flow/README.md" || { echo "README lacks final_pass_globs"; exit 1; }
+grep -q 'single intentional exception' "$REF10" || { echo "contract lacks legal handoff exception"; exit 1; }
+for a in billing mobile infra; do
+    grep -q 'git diff --name-only DIFF_RANGE' "$ROOT/dev-flow/agents/$a-reviewer.md" || { echo "$a lacks names-only list"; exit 1; }
+done
+grep -q 'names-only list' "$REF10" || { echo "contract lacks names-only list"; exit 1; }
+grep -q 'Do NOT read reviewer/implementer reports' "$ROOT/dev-flow/agents/documentation-maintainer.md" || { echo "docs agent lacks no-reports rule"; exit 1; }
+grep -q 'not to read `phase-N-implementation.md`' "$SKILL_DIR/references/08-docs-pm-completion.md" || { echo "08 docs dispatch lacks no-reports rule"; exit 1; }
 echo "dev-flow contract: PASS ($plugin_version)"

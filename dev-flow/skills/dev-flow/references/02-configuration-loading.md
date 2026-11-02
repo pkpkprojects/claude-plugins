@@ -99,6 +99,8 @@ Compute one canonical gate and reuse it everywhere:
 
 `LEGAL_REVIEW_APPLIES = LEGAL_CONFIG is not null AND TASK_TEXT is not tagged hotfix or refactor AND LEGAL_REVIEW_ENABLED is true`.
 
+`LEGAL_FINAL_GLOBS` = `legal.final_pass_globs` if set, else the defaults: consent, cookie, privacy, i18n/copy, retention, analytics, age/dob path globs (e.g. `**/*consent*`, `**/*cookie*`, `**/*privacy*`, `**/i18n/**`, `**/*retention*`, `**/*analytics*`, `**/*dob*`, `**/*birth*`, `**/*age-gate*`, `**/*age_gate*`, `**/*age-verif*`).
+
 Do not reimplement this predicate in task creation, plan review, code review, or re-review.
 
 ### Step 2.3b: Load Domain Review Configuration

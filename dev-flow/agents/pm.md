@@ -105,6 +105,15 @@ Before generating the report, use the `superpowers:verification-before-completio
    - Performance optimizations identified but not implemented
    - Features that were descoped during the pipeline
 
+## Evidence rule (BLOCKED, never PASS on assumption)
+
+You receive EVIDENCE, not just statuses, and no code. Required: for every gate (security, legal, each
+domain, acceptance) the verdict + path to the gate artifact; for acceptance the per-criterion evidence
+matrix (the acceptance artifact's `### Acceptance Criteria` section, copied verbatim by the orchestrator); test/lint/build runs
+(command, exit code, output tail); commit SHAs (RED and GREEN for bug fixes). Missing or unverifiable
+evidence is BLOCKED, never PASS: do not report COMPLETE or PASS on it. Spot-check at least one listed
+FAST command (re-run it; never slow e2e) or listed artifact (Read it) and name which in the report's `Evidence Review`.
+
 ## Output Format: Final Report
 
 ```markdown
@@ -116,6 +125,10 @@ Before generating the report, use the `superpowers:verification-before-completio
 1. [Phase name] - DONE
 2. [Phase name] - DONE
 3. [Phase name] - SKIPPED (reason)
+
+### Evidence Review
+- [gate]: [verdict] - [artifact path] - OK / MISSING / UNVERIFIABLE (MISSING/UNVERIFIABLE = BLOCKED)
+- Spot-check: [command re-run or artifact read, and its result]
 
 ### Test Results
 - Command: `[test_command]`

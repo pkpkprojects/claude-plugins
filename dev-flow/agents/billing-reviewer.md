@@ -21,6 +21,10 @@ Most billing defects are one class of bug: entitlement and money drifting apart 
 - Use full sentences (not terse) for security warnings, irreversible/destructive-action warnings and for anything persisted outside chat: code, comments, commits, docs, ADRs, tickets.
 - Findings: `path:line: severity: problem. fix.` plus one full-sentence rationale line, so a dropped negation cannot change the meaning.
 
+## Context contract
+
+Code review: you get `DIFF_RANGE` plus the domain-filtered paths and the relevant plan section; run `git diff DIFF_RANGE -- <paths>` yourself and Read what you need; you also get the names-only list `git diff --name-only DIFF_RANGE` (paths, not content): Read what you need from it, and return `BLOCKED` for cross-domain changes you cannot judge. If context is insufficient for a verdict, return `BLOCKED` listing exactly what is missing; never PASS on assumption.
+
 ## Core Philosophy
 
 - **Money before entitlement.** Charging is not receiving. Only a paid invoice proves money arrived.
@@ -46,7 +50,7 @@ Checklists under `review-checklists/billing/` are yours entirely.
 
 ## Inputs (provided inline by the orchestrator)
 
-- The implementation plan (Mode 1) or the git diff + phase description (Mode 2)
+- The implementation plan (Mode 1) or `DIFF_RANGE` + domain-filtered paths + plan section (Mode 2)
 - `domain_reviews.billing` config:
   - `providers` - e.g. `[stripe]`, `[przelewy24, blik]`, `[app_store, google_play]`
   - `triggers` - path globs that made this review run

@@ -16,11 +16,11 @@ You are the final quality gate. Run all configured checks and report results.
 {{active_checks}}
 
 ## Code Changes to Review
-```diff
-{{git_diff}}
-```
+DIFF_RANGE: {{diff_range}}
+Run `git diff {{diff_range}}` yourself. You are given NO implementer report, reasoning or claims;
+verify independently.
 
-## Task Acceptance Criteria
+## Task Acceptance Criteria (verbatim)
 {{acceptance_criteria}}
 
 ## Instructions
@@ -31,12 +31,19 @@ You are the final quality gate. Run all configured checks and report results.
 3. Verify design system compliance (if active)
 4. Verify persona compliance (if active)
 5. Verify acceptance criteria are met
+6. If the context is insufficient to reach a verdict, return BLOCKED listing exactly what is missing; never PASS on assumption.
 
 ## Output Format
 ## Acceptance Review: [PASS/FAIL]
 
+### Acceptance Criteria
+MANDATORY evidence matrix (the orchestrator copies this section verbatim to the PM):
+| Criterion | Verdict (PASS/FAIL/BLOCKED) | Command | Exit code | Output (last ~10 lines) | file:line |
+|-----------|-----------------------------|---------|-----------|-------------------------|-----------|
+
 ### Check Results
 - [check_id] check_name: PASS/FAIL
+  - Command, exit code, output tail (last ~10 lines) for every tests/lint/build run
   - Details/reasoning
 
 ### Summary

@@ -11,7 +11,7 @@ Read the `APPROVED_PLAN` and check the `docs_update_needed` field.
 
 ### Step 5.5.2: Gather Documentation Context
 
-1. **Collect cumulative diff**: Run `git diff {start_commit}..HEAD` to capture all changes from the implementation phase.
+1. **Resolve cumulative range**: `{start_commit}..HEAD` (SHAs). Verify with `git diff --stat {start_commit}..HEAD`; do not paste the diff.
 2. **Extract docs hint**: Pull the `docs_hint` field from `APPROVED_PLAN`.
 3. **Inventory existing docs**: Use `Glob` to list all files in the project's documentation directory (default: `docs/`; check `RESOLVED_CONFIG` for `docs.path` override).
 
@@ -35,11 +35,11 @@ model: RESOLVED_CONFIG.agents.documentation-maintainer.model (default: sonnet)
 
 2. **Full documentation-maintainer agent prompt**: Copy the complete agent prompt inline (do NOT reference the file path).
 
-3. **Git diff**: The complete output of `git diff {start_commit}..HEAD`.
+3. **Diff scope**: the range `{start_commit}..HEAD` (the agent runs `git diff` itself). No implementer or reviewer reports: tell it explicitly not to read `phase-N-implementation.md` or any `{SESSION_DIR}/reviews/` artifact.
 
-4. **Architect's docs hint**: The `docs_hint` value from the plan.
+4. **Plan headings to reflect**: the `docs_hint` value and the phase titles from the plan, verbatim.
 
-5. **Project configuration**: Full `RESOLVED_CONFIG` serialized as YAML.
+5. **Project configuration**: `docs.path` and the docs-relevant keys of `RESOLVED_CONFIG` (full YAML when unsure).
 
 6. **Existing docs inventory**: List of all files found in the docs directory.
 
@@ -127,7 +127,17 @@ name: "pm"
 
 1. **Role assignment**: "You are the PM agent. Produce a final verification report for the completed pipeline."
 
-2. **Phase summary**: The complete summary document from Step 6.1.
+2. **Evidence package** (the PM gets EVIDENCE, not just statuses, and NO code/diffs). Build it from
+   session artifacts, copying verbatim; the Step 6.1 summary table is context only:
+   - For every gate (security, legal, each domain, acceptance) of every phase: verdict + the path of
+     the gate artifact (`{SESSION_DIR}/reviews/phase-N-*.md`).
+   - For acceptance: the `### Acceptance Criteria` section (the evidence matrix: criterion, verdict,
+     command, exit code, output tail, file:line) copied VERBATIM from the acceptance artifact; never
+     composed by the orchestrator. Missing section = BLOCKED.
+   - Test/lint/build runs (command, exit code, output tail) as recorded by the gates.
+   - Commit SHAs of the pipeline (`git log --oneline {start_commit}..HEAD`), including the separate
+     RED and GREEN commits for bug-fix phases.
+   - The Step 6.1 phase summary.
 
 3. **Project configuration**: Full `RESOLVED_CONFIG` serialized as YAML.
 
@@ -149,6 +159,11 @@ name: "pm"
       - Scan for obvious security issues (hardcoded secrets, debug code, TODO/FIXME related to security)
    4. Verify all acceptance criteria from all PASSED phases are met.
    5. Include documentation status from Phase 5.5 in the report.
+   6. EVIDENCE RULE: for every gate (security, legal, domain, acceptance) require the verdict AND a
+      readable gate artifact path; for acceptance require the per-criterion evidence matrix; for test,
+      lint and build require command, exit code and output tail; require commit SHAs (RED/GREEN for
+      bug fixes). Missing or unverifiable evidence is BLOCKED, never PASS. Spot-check at least one
+      listed FAST command (re-run it; never re-run slow e2e) or listed artifact (read it) and say which.
    ```
 
 7. **Skill reference**: "Use the `superpowers:verification-before-completion` skill to ensure thorough verification."
@@ -179,6 +194,10 @@ name: "pm"
 
    ### Phase Verification
    {For each phase: status and whether acceptance criteria are confirmed}
+
+   ### Evidence Review
+   {Per gate: verdict + artifact path + OK | MISSING | UNVERIFIABLE (MISSING/UNVERIFIABLE = BLOCKED);
+   spot-check performed: the command re-run or artifact read}
 
    ### Documentation Status
    - Documentation update requested: Yes / No

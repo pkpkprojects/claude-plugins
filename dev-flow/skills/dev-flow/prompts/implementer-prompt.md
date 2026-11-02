@@ -34,7 +34,7 @@ Use this persona's tone and language style in all user-facing text.
 {{/persona_refs}}
 
 {{#reviewer_feedback}}
-## Reviewer Feedback (Fix Required)
+## Reviewer Feedback (Fix Required; only from failing reviewers, fix iterations only)
 {{reviewer_feedback}}
 Address ALL feedback items before considering the task complete.
 {{/reviewer_feedback}}

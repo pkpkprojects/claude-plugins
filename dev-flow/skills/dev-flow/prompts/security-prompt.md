@@ -19,9 +19,12 @@ You are a security expert reviewing code changes.
 {{security_checks}}
 
 ## Code Changes to Review
-```diff
-{{git_diff}}
-```
+DIFF_RANGE: {{diff_range}}
+Run `git diff {{diff_range}}` yourself and Read any repo file you need. You are given NO implementer
+narrative or claims.
+
+## Security Profile
+- **Trust boundaries / auth model:** {{security_profile}}
 
 ## Instructions
 1. Review ALL changes for security vulnerabilities
@@ -33,6 +36,8 @@ You are a security expert reviewing code changes.
 3. For each finding, provide: severity, confidence (%), file:line, description, fix suggestion
 4. Only report findings with confidence >= 80%
 5. Include CWE references where applicable
+6. For every new or changed entry point/handler, Grep for its callers and the authz middleware even outside the diff. If the security profile is "not documented" and the change touches auth or data access, return `BLOCKED`.
+7. If the context is insufficient to reach a verdict, return BLOCKED listing exactly what is missing; never PASS on assumption.
 
 ## Output Format
 ## Security Review: [PASS/FAIL]

@@ -15,6 +15,8 @@ Combine all failure feedback into a single feedback document:
 
 ### Source: {security-reviewer | legal-reviewer | {domain}-reviewer | acceptance-reviewer | combination}
 
+(Include ONLY sections from reviewers that returned FAIL; never passed reviewers' reports. Copy findings verbatim, do not re-word.)
+
 ### Findings Requiring Action:
 {List of all CRITICAL and HIGH findings from security review}
 {List of all CRITICAL findings from legal review}
@@ -100,7 +102,7 @@ The implementer then:
 6. Marks the fix task completed
 7. Stops and waits for further instructions
 
-**Context overflow safeguard:** After 2 fix iterations with the same agent, if reviews still fail, shut down the agent and spawn a fresh one (prompt first line `Agent references dir: <abs path>`) with a summary of all previous attempts and the current git diff.
+**Context overflow safeguard:** After 2 fix iterations with the same agent, if reviews still fail, shut down the agent and spawn a fresh one (prompt first line `Agent references dir: <abs path>`) with the failing reviewers' latest findings verbatim (Step 5e.1 document) and `DIFF_RANGE`; no summary of earlier attempts and no passed reviewers' reports.
 
 **Step 5e.3: Re-Run Failing Reviews**
 

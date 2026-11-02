@@ -70,3 +70,6 @@ Pipeline order: 1 -> 2 -> 2.5 -> 3 -> (4) -> 5 (per phase: 5.0/5.0b/5.0c, 5a, 5b
    `cd <base>/../../agent-references && pwd`, verify with one `ls`, remember it, and put
    `Agent references dir: <abs path>` as the FIRST line of EVERY Agent/teammate dispatch prompt
    (every agent, mode, consult, re-review, retry). Do not use plugin-root environment variables in prose; they are not substituted there.
+9. **Context contract (MUST).** Every dispatch follows the table in `references/10-agent-dispatch-and-flow.md`
+   "Context Contract": minimum context per agent, filtered mechanically (globs/ranges/paths), never LLM-summarized,
+   references (git SHA range, session-dir paths) over pasted code. Reviewers never get the implementer's report or claims; PM gets evidence, not statuses.

@@ -40,6 +40,54 @@ mode). The role and philosophy come from the agent definition; the prompt carrie
 > `TaskUpdate` and `SendMessage`; only as a last resort fall back to `general-purpose` for that one
 > dispatch, with a comment explaining why.
 
+## Context Contract (single source of truth)
+
+Every agent gets the MINIMUM context for its job. Filter MECHANICALLY (globs, path lists, git ranges,
+plan section extraction by heading) and never LLM-summarize or paraphrase evidence for a reviewer: a
+lossy summary can hide a fact and cause a false PASS. Pass REFERENCES (git SHA range, file paths,
+session-dir artifact paths) instead of pasted code or reports wherever the agent has Read/Bash.
+
+- `DIFF_RANGE` = `<PHASE_BASE>..<PHASE_HEAD> -- <files_to_touch of that slot/phase>` (full SHAs,
+  path-scoped). Record `PHASE_BASE = git rev-parse HEAD` BEFORE dispatching the implementer (Step 5b)
+  and `PHASE_HEAD` after its last commit (and after each fix iteration). Parallel slots each record
+  their OWN `PHASE_BASE`/`PHASE_HEAD` (or commit list) and their own path scope (no file overlap,
+  §3.1b), so another slot's commits never enter the range; reviewers run per slot, or once on the
+  union of the scoped paths. Monorepo: also scope `-- <sub-project path>` and run that sub-project's
+  commands. Persist `PHASE_BASE`/`PHASE_HEAD` in the header of `phase-N-implementation.md`; if absent
+  on resume, ASK THE USER (never derive from git history). Cumulative range for docs/PM is
+  `{start_commit}..HEAD`.
+- Domain-filtered paths = `git diff --name-only DIFF_RANGE` matched against the domain's `triggers`
+  (the `domain_applies` mechanism). Reviewers run `git diff <PHASE_BASE>..<PHASE_HEAD> -- <those paths>`
+  themselves (the matched paths are a subset of the scope, so they replace it).
+- Plan section = the plan's `#### Phase N:` block extracted by heading, verbatim.
+- Gate artifact = `{SESSION_DIR}/reviews/phase-N-{security|<domain>|legal|acceptance}.md`.
+
+| Agent | Receives (references preferred) | NEVER receives |
+|-------|---------------------------------|----------------|
+| architect | unchanged: full task, config, broad repo access | - |
+| ux-designer | unchanged: approved plan + design inventory + personas | - |
+| implementer | task + its own acceptance criteria + its own plan section + design-system components for the phase + (fix iterations only) the failing reviewers' findings | other phases, other reviewers' PASSED reports |
+| security-reviewer (code) | `DIFF_RANGE` + project security profile (stack, trust boundaries, auth model from config/plan; "not documented" if absent) + `run: true` security checks + permission to read the repo | implementer narrative/report, self-claims |
+| security-reviewer (plan) | the plan + security profile | - |
+| acceptance-reviewer | task + acceptance criteria VERBATIM + `DIFF_RANGE` + how to run checks (test/lint commands, resolved checks) | implementer report/reasoning/self-claims, architect rationale, full plan, other gates' verdicts |
+| legal-reviewer | plan section(s) (plan mode: plan) + data-model/schema change paths + dependency-manifest changes (SDKs, analytics) + user groups (e.g. minors) + jurisdictions + data-collection points list + legal config/checklists; may Read any repo path it names; final phase (and any phase touching legal globs): path-filtered cumulative diff `git diff {start_commit}..HEAD -- <legal globs>` | full UI/logic diff pasted. If facts are insufficient it returns BLOCKED listing the missing facts. The single intentional exception: it also receives "Domain handoffs" (billing handoff lines + `BILLING_REVIEWED`) from other gates |
+| billing/mobile/infra reviewers | domain-filtered paths (`git diff DIFF_RANGE -- <paths>`) + names-only list `git diff --name-only DIFF_RANGE` (paths, not content; Read what is needed or return `BLOCKED` for cross-domain changes) + relevant plan section + domain config/checklists | the rest of the diff content |
+| documentation-maintainer | `{start_commit}..HEAD` range + doc paths/inventory + plan headings (`docs_hint`, phase titles) it must reflect | implementer reports, review reports (it must not read `phase-N-*.md` artifacts under `{SESSION_DIR}/reviews/`) |
+| devops-monitor | unchanged: scope/symptom + config | - |
+| pm | NO code. EVIDENCE: per gate (security, legal, each domain, acceptance) the verdict + gate artifact path; acceptance `### Acceptance Criteria` evidence matrix copied verbatim from the acceptance artifact; test/lint/build runs (command, exit code, output tail); commit SHAs (incl. RED/GREEN for bug fixes) | pasted code/diffs, bare statuses |
+
+Universal rules:
+1. Insufficient context to reach a verdict -> the agent returns `BLOCKED` listing exactly what is
+   missing; never PASS on assumption. The orchestrator supplies the missing items (mechanically) and
+   resumes the same task.
+2. Reviewers are never given the implementer's pass/fail claims, test-pass assertions, or summaries as input.
+   `phase-N-implementation.md` is for the orchestrator and PM only, never a reviewer input.
+3. PM treats missing or unverifiable evidence as `BLOCKED`, never PASS, and may spot-check by
+   re-running a listed command or reading a listed artifact.
+4. Choosing what to include is mechanical wherever possible; the unavoidable orchestrator judgements
+   (user groups, data-collection points for legal; which plan headings docs must reflect) must be
+   copied from the plan/config text verbatim, not re-worded.
+
 ### Architect
 
 | Field | Value |
@@ -65,7 +113,7 @@ mode). The role and philosophy come from the agent definition; the prompt carrie
 | Field | Value |
 |-------|-------|
 | When | Phase 5b (implementation) and Phase 5e (fixes) |
-| Input | Phase description + design refs + RESOLVED_CONFIG + test/lint commands |
+| Input | Own phase + criteria + design refs + test/lint commands (+ findings on fix iterations); see Context Contract |
 | Skills | None |
 | Output | Code changes + commits |
 | User interaction | No |
@@ -75,7 +123,7 @@ mode). The role and philosophy come from the agent definition; the prompt carrie
 | Field | Value |
 |-------|-------|
 | When | Phase 5c (after implementation) |
-| Input | Git diff + project context + security checks |
+| Input | `DIFF_RANGE` + security profile + security checks; see Context Contract |
 | Skills | None |
 | Output | Security review with PASS/FAIL verdict |
 | User interaction | No |
@@ -85,7 +133,7 @@ mode). The role and philosophy come from the agent definition; the prompt carrie
 | Field | Value |
 |-------|-------|
 | When | Phase 3 Step 3.5c (plan review) and Phase 5 Step 5c.5 (code review) |
-| Input | Plan or git diff + LEGAL_CONFIG + LEGAL_CHECKLISTS + RESOLVED_CONFIG |
+| Input | Plan, or (code) schema/dependency changes + user groups + jurisdictions + collection points; + LEGAL_CONFIG + LEGAL_CHECKLISTS; see Context Contract |
 | Skills | None |
 | Output | Legal compliance review with PASS/FAIL verdict |
 | User interaction | No |
@@ -96,7 +144,7 @@ mode). The role and philosophy come from the agent definition; the prompt carrie
 | Field | Value |
 |-------|-------|
 | When | Phase 3 Step 3.2b (consult), Step 3.5b (plan review) and Phase 5 Step 5c.4 (code review) |
-| Input | Plan or git diff + `domain_reviews.{domain}` config + domain checklists (+ shared legal subscription checklists for billing) + RESOLVED_CONFIG |
+| Input | Plan section, or domain-filtered paths in `DIFF_RANGE` + `domain_reviews.{domain}` config + domain checklists (+ shared legal subscription checklists for billing) + RESOLVED_CONFIG |
 | Skills | None |
 | Output | Domain review with PASS/FAIL verdict |
 | User interaction | No (policy decisions surface through the architect in Step 3.6) |
@@ -107,7 +155,7 @@ mode). The role and philosophy come from the agent definition; the prompt carrie
 | Field | Value |
 |-------|-------|
 | When | Phase 5d (after security, legal and domain reviews pass) |
-| Input | Git diff + acceptance criteria + full RESOLVED_CHECKS + RESOLVED_CONFIG |
+| Input | Verbatim criteria + `DIFF_RANGE` + RESOLVED_CHECKS + test/lint commands; NO implementer report |
 | Skills | None |
 | Output | Acceptance review with PASS/FAIL verdict |
 | User interaction | No |
@@ -117,7 +165,7 @@ mode). The role and philosophy come from the agent definition; the prompt carrie
 | Field | Value |
 |-------|-------|
 | When | Phase 5.5 (after all implementation phases, before PM oversight) |
-| Input | Cumulative git diff + architect's docs_hint + RESOLVED_CONFIG + existing docs inventory |
+| Input | Cumulative range `{start_commit}..HEAD` + architect's docs_hint + RESOLVED_CONFIG + existing docs inventory |
 | Skills | None |
 | Output | Updated/created documentation + Mermaid diagrams + commit |
 | User interaction | No |
@@ -128,7 +176,7 @@ mode). The role and philosophy come from the agent definition; the prompt carrie
 | Field | Value |
 |-------|-------|
 | When | Phase 6 (after all phases complete) |
-| Input | Phase summary + commits + RESOLVED_CONFIG + test/lint commands |
+| Input | Evidence package (gate verdicts + artifact paths, criterion matrix, run results, commit SHAs) + test/lint commands |
 | Skills | superpowers:verification-before-completion |
 | Output | Final pipeline report |
 | User interaction | No (report presented by orchestrator) |

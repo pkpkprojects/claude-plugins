@@ -130,7 +130,7 @@ Parse this plan and extract:
 ### Step 3.5a: Security Review of the Plan (Mandatory)
 
 Dispatch a fresh `dev-flow:security-reviewer` named `security-plan-review` (prompt first line `Agent references dir: <abs path>`). Give it the complete
-`ARCHITECT_PLAN`, `RESOLVED_CONFIG`, and security-reviewer extra instructions. State explicitly that
+`ARCHITECT_PLAN`, the security profile (`project.type`/`stack`, trust boundaries and auth model verbatim from config/plan), and security-reviewer extra instructions. State explicitly that
 it is reviewing architecture, not code, and must challenge the full threat model rather than a fixed
 example checklist.
 

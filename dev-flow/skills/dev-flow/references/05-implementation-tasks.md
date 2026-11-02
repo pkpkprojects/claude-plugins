@@ -29,7 +29,7 @@ TaskCreate(
   subject="Phase N: Implement {phase title}",
   description="{phase description, files_to_touch, acceptance_criteria, UX guidance if any}
     Write implementation following TDD. Commit when done.
-    Write summary to {SESSION_DIR}/reviews/phase-N-implementation.md",
+    Write summary to {SESSION_DIR}/reviews/phase-N-implementation.md (header: PHASE_BASE/PHASE_HEAD)",
   activeForm="Implementing Phase N"
 )
 → store as IMPL_N
@@ -37,7 +37,8 @@ TaskCreate(
 TaskCreate(
   subject="Phase N: Security Review",
   description="Review the code changes from Phase N. Files: {files_to_touch}.
-    Read {SESSION_DIR}/reviews/phase-N-implementation.md for context.
+    Review the range recorded as DIFF_RANGE (git SHAs) in the dispatch prompt. Do NOT read the
+    implementation report; it is not reviewer input.
     Write full review to {SESSION_DIR}/reviews/phase-N-security.md",
   activeForm="Security reviewing Phase N"
 )
@@ -48,7 +49,7 @@ TaskCreate(
   subject="Phase N: Acceptance Review",
   description="Acceptance criteria (verify every item independently): {acceptance_criteria}.
     These criteria are the primary acceptance contract. Run the configured test and lint
-    commands. Read the phase-N implementation and security reviews.
+    commands. Do not read the implementation report or other gates' reports; verify independently.
     is_final_phase: {true when N is the final phase, otherwise false}. Run speed:fast checks for
     every phase; run speed:slow checks only when is_final_phase is true.
     is_bugfix: {true when this phase fixes a reported bug}. When true, verify the separate RED and
@@ -147,7 +148,12 @@ subagent_type: dev-flow:implementer
 name: "implementer-{slot}"
 ```
 
-**Prompt must include ALL of the following inline (CRITICAL: pass complete text, NOT file paths):**
+Before dispatching, record `PHASE_BASE = git rev-parse HEAD` in `PIPELINE_STATE` (it starts the
+`DIFF_RANGE` used by every reviewer; see the Context Contract in `references/10-agent-dispatch-and-flow.md`).
+On fix iterations the implementer receives only the failing reviewers' findings (Step 5e), never
+passed reviewers' reports or other phases.
+
+**Prompt must include ALL of the following inline (CRITICAL: pass the complete phase text, NOT a path to the plan):**
 
 0. **First line**: `Agent references dir: <abs path>` (SKILL.md invariant 8).
 
@@ -159,10 +165,10 @@ name: "implementer-{slot}"
    - Phase title and description
    - Files to touch
    - Acceptance criteria
-   - Dependencies context (what previous phases produced, if relevant)
+   - Dependencies context only as file paths/interfaces the phase must use (not other phases' reports)
 
 3. **Design system references** (only if applicable to this phase):
-   - Specific component file paths and their contents relevant to this phase
+   - Specific component file paths relevant to this phase (the implementer can Read them)
    - Persona references if the phase involves user-facing text/UX
    - Do NOT dump the entire design system -- only what is relevant
 

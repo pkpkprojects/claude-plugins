@@ -138,6 +138,7 @@ legal:
   jurisdictions: [PL, EU]
   sectors: []               # medical, financial
   extras: []                # ecommerce, ai, platform
+  final_pass_globs: []      # optional; overrides default consent/cookie/privacy/i18n/retention/analytics/age globs for the final-phase legal pass
   overrides:
     - check: GDPR-02
       status: ACKNOWLEDGED
@@ -244,7 +245,7 @@ dev-flow integrates with the [superpowers](https://github.com/obra/superpowers) 
 ```
 dev-flow/
 ├── .claude-plugin/
-│   └── plugin.json                 # Plugin manifest (v1.8.0)
+│   └── plugin.json                 # Plugin manifest (v1.9.0)
 ├── agents/                         # 12 specialized agent definitions
 │   ├── architect.md
 │   ├── ux-designer.md
