@@ -119,6 +119,7 @@ Spawn documentation-maintainer agents as team members, up to `max_parallel_agent
 
 For each agent, the prompt must include:
 
+0. **First line**: `Agent references dir: <abs path>` (derive and verify it as in the dev-flow SKILL.md invariant 8: `<dev-flow skill base directory>/../../agent-references`, absolute via Bash `cd ... && pwd`).
 1. **Role**: "You are a documentation-maintainer agent in AUDIT MODE."
 2. **Module assignment**: The specific module path and scope
 3. **Project configuration**: `RESOLVED_CONFIG` serialized as YAML
@@ -173,6 +174,8 @@ consistency (`subagent_type: "dev-flow:documentation-maintainer"`, `name: "docs-
 
 **Prompt:**
 ```
+Agent references dir: <abs path>
+
 You are a documentation-maintainer agent performing a CONSISTENCY PASS.
 
 All module-level documentation has been updated. Your job is to ensure cross-module consistency:

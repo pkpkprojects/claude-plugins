@@ -244,7 +244,7 @@ dev-flow integrates with the [superpowers](https://github.com/obra/superpowers) 
 ```
 dev-flow/
 ├── .claude-plugin/
-│   └── plugin.json                 # Plugin manifest (v1.7.0)
+│   └── plugin.json                 # Plugin manifest (v1.8.0)
 ├── agents/                         # 12 specialized agent definitions
 │   ├── architect.md
 │   ├── ux-designer.md
@@ -258,12 +258,15 @@ dev-flow/
 │   ├── documentation-maintainer.md
 │   ├── pm.md
 │   └── devops-monitor.md
+├── agent-references/               # Per-agent CONDITIONAL detail only (modes, UI/bugfix, overrides, rare cases), Read on demand (NOT registered as agents)
+│   └── <agent>/*.md                # e.g. ux-designer/storybook-mode.md, billing-reviewer/mode1-plan-review.md
 ├── commands/
 │   ├── docs-audit.md               # /dev-flow:docs-audit -- standalone documentation audit
 │   ├── monitor.md                  # /dev-flow:monitor -- standalone read-only monitoring sweep
 │   └── init.md                     # /dev-flow:init -- project setup
 ├── skills/dev-flow/
-│   ├── SKILL.md                    # /dev-flow:dev-flow -- main orchestrator entry point
+│   ├── SKILL.md                    # /dev-flow:dev-flow -- orchestrator core (small)
+│   ├── references/                 # per-phase procedure, loaded on demand
 │   └── prompts/                    # Agent dispatch templates
 ├── hooks/
 │   ├── hooks.json                  # Session start + approval-gate hooks

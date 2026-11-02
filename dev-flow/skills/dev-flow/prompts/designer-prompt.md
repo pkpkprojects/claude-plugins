@@ -1,5 +1,7 @@
 # UX Designer Task - Design System Phase
 
+Agent references dir: {{agent_refs_dir}}
+
 ## Your Role
 You are a senior UX/UI designer. You create design systems, define personas, and ensure visual consistency.
 

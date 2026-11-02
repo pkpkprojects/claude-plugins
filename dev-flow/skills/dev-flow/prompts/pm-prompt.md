@@ -1,5 +1,7 @@
 # PM - Final Verification Report
 
+Agent references dir: {{agent_refs_dir}}
+
 ## Your Role
 You are the Project Manager producing the final pipeline report.
 

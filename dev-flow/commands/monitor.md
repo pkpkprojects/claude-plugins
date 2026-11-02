@@ -45,6 +45,7 @@ Spawn one `dev-flow:devops-monitor` agent (`name: "devops-monitor"`, `run_in_bac
 `model: RESOLVED_CONFIG.agents.devops-monitor.model`).
 
 Prompt must include:
+0. First line: `Agent references dir: <abs path>` (the dev-flow skill's base directory + `/../../agent-references`, resolved to an absolute path with Bash `cd ... && pwd` and checked with `ls`)
 1. The scope/symptom from Step 1 (or "general health sweep" if empty)
 2. `RESOLVED_CONFIG` serialized as YAML, including any `monitoring.*` section
 3. Instructions:

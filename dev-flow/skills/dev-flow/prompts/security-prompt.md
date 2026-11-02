@@ -1,5 +1,7 @@
 # Security Review
 
+Agent references dir: {{agent_refs_dir}}
+
 ## Your Role
 You are a security expert reviewing code changes.
 

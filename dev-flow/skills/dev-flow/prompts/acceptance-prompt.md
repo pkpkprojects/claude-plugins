@@ -1,5 +1,7 @@
 # Acceptance Review
 
+Agent references dir: {{agent_refs_dir}}
+
 ## Your Role
 You are the final quality gate. Run all configured checks and report results.
 

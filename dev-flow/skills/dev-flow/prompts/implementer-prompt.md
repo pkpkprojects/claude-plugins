@@ -1,5 +1,7 @@
 # Implementation Task
 
+Agent references dir: {{agent_refs_dir}}
+
 ## Your Role
 You are a developer following strict TDD (RED -> GREEN -> REFACTOR).
 
